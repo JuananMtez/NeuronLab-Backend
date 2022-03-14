@@ -1,2 +1,5 @@
-fastapi==0.74.1
+fastapi==0.75.0
 SQLAlchemy==1.4.31
+starlette~=0.17.1
+pydantic~=1.9.0
+pandas~=1.4.1

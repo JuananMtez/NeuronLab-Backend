@@ -106,20 +106,29 @@ class ActivationFunc(enum.Enum):
     softmax = 2
 
 
+Researcher_Experiment = Table('researcher_experiment', Base.metadata,
+                              Column('researcher_id', ForeignKey('researcher.id'), primary_key=True),
+                              Column('experiment_id', ForeignKey('experiment.id'), primary_key=True))
+
+Experiment_Subject = Table('experiment_subject', Base.metadata,
+                           Column('experiment_id', ForeignKey('experiment.id'), primary_key=True),
+                           Column('subject_id', ForeignKey('subject.id'), primary_key=True))
+
+
 class Researcher(Base):
     __tablename__ = 'researcher'
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(255))
+    surname = Column(String(255))
     email = Column(String(255), unique=True, index=True)
     user = Column(String(255), unique=True, index=True)
     password = Column(String(255))
-    experiments = relationship("Experiment")
 
-
-TExperiment_Subject = Table('experiment_subject', Base.metadata,
-                            Column('experiment_id', ForeignKey('experiment.id'), primary_key=True),
-                            Column('subject_id', ForeignKey('subject.id'), primary_key=True))
+    experiments = relationship(
+        "Experiment",
+        secondary=Researcher_Experiment,
+        back_populates="researchers")
 
 
 class Experiment(Base):
@@ -128,13 +137,23 @@ class Experiment(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(255))
     description = Column(String(255))
-    researcher_id = Column(Integer, ForeignKey('researcher.id'))
-    labels = relationship("Label")
+    researcher_creator_id = Column(Integer)
+
+    labels = relationship("Label", cascade="save-update, delete")
+
+    device = relationship("Device", back_populates="experiment", uselist=False, cascade="save-update, delete")
+
+    researchers = relationship(
+        "Researcher",
+        secondary=Researcher_Experiment,
+        back_populates="experiments")
 
     subjects = relationship(
         "Subject",
-        secondary=TExperiment_Subject,
+        secondary=Experiment_Subject,
         back_populates="experiments")
+
+    csvs = relationship("CSV")
 
     training_models = relationship("TrainingModel")
 
@@ -150,9 +169,13 @@ class Label(Base):
 class Device(Base):
     __tablename__ = 'device'
 
-    id = Column(Integer, primary_key=True)
+    id = Column(Integer, primary_key=True, index=True)
     name = Column(String(255))
-    sampleRate = Column(Float)
+    sample_rate = Column(Float)
+
+    experiment_id = Column(Integer, ForeignKey('experiment.id'))
+    experiment = relationship("Experiment", back_populates="device")
+
     type = Column(String(50))
 
     __mapper_args__ = {
@@ -164,8 +187,8 @@ class Device(Base):
 class EEGHeadset(Device):
     __tablename__ = 'eeg_headset'
 
-    id = Column(Integer, ForeignKey('device.id'), primary_key=True)
-    channels = relationship("Channel")
+    id = Column(Integer, ForeignKey('device.id'), primary_key=True, index=True)
+    channels = relationship("Channel", cascade="save-update, delete")
 
     __mapper_args__ = {
         'polymorphic_identity': 'eeg_headset',
@@ -177,6 +200,7 @@ class Channel(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     channel = Column("channel", Enum(NameChannel))
+
     eeg_headset_id = Column(Integer, ForeignKey('eeg_headset.id'))
 
 
@@ -187,14 +211,13 @@ class Subject(Base):
     name = Column(String(255), index=True)
     surname = Column(String(255))
     age = Column(Integer)
-    totalExperimentsPerformed = Column(Integer)
-    mental_conditions = relationship("MentalCondition")
+    total_experiments_performed = Column(Integer)
+
+    mental_conditions = relationship("MentalCondition", cascade="save-update, delete")
     experiments = relationship(
         "Experiment",
-        secondary=TExperiment_Subject,
+        secondary=Experiment_Subject,
         back_populates="subjects")
-
-    csvs = relationship("CSV", back_populates="subject")
 
 
 class MentalCondition(Base):
@@ -212,10 +235,11 @@ class CSV(Base):
     name = Column(String(255))
     path = Column(String(255), unique=True)
     original = Column(Boolean, default=False)
+    subject_name = Column(String(255), index=True)
+
     experiment_id = Column(Integer, ForeignKey('experiment.id'))
-    experiments = relationship("Position")
-    subject_id = Column(Integer, ForeignKey('subject.id'))
-    subject = relationship("Subject", back_populates="csvs")
+
+    positions = relationship("Position", cascade="save-update, delete")
 
 
 class Position(Base):
@@ -223,19 +247,21 @@ class Position(Base):
 
     id = Column(Integer, primary_key=True)
     position = Column(Integer)
+
     csv_id = Column(Integer, ForeignKey('csv.id'))
 
     filter = relationship("Filter", back_populates="position", uselist=False)
     downsampling = relationship("Downsampling", back_populates="position", uselist=False)
-    ICA = relationship("ICA", back_populates="position", uselist=False)
+    ica = relationship("ICA", back_populates="position", uselist=False)
     feature_extraction = relationship("FeatureExtraction", back_populates="position", uselist=False)
 
 
 class Downsampling(Base):
     __tablename__ = 'downsampling'
 
-    id = Column(Integer, primary_key=True)
+    id = Column(Integer, primary_key=True, index=True)
     freq = Column(Float)
+
     position_id = Column(Integer, ForeignKey('position.id'))
     position = relationship("Position", back_populates="downsampling")
 
@@ -243,17 +269,21 @@ class Downsampling(Base):
 class ICA(Base):
     __tablename__ = 'ica'
 
-    id = Column(Integer, primary_key=True)
+    id = Column(Integer, primary_key=True, index=True)
     method = Column("method", Enum(ICAMethod))
+
     labels = relationship("ComponentRemoved")
+
     position_id = Column(Integer, ForeignKey('position.id'))
     position = relationship("Position", back_populates="ica")
+
+
 
 
 class ComponentRemoved(Base):
     __tablename__ = 'component_removed'
 
-    id = Column(Integer, primary_key=True)
+    id = Column(Integer, primary_key=True, index=True)
     component = Column(Integer)
     ica_id = Column(Integer, ForeignKey('ica.id'))
 
@@ -261,7 +291,7 @@ class ComponentRemoved(Base):
 class FeatureExtraction(Base):
     __tablename__ = 'feature_extraction'
 
-    id = Column(Integer, primary_key=True)
+    id = Column(Integer, primary_key=True, index=True)
     position_id = Column(Integer, ForeignKey('position.id'))
     position = relationship("Position", back_populates="feature_extraction")
 
@@ -269,12 +299,15 @@ class FeatureExtraction(Base):
 class Filter(Base):
     __tablename__ = 'filter'
 
-    id = Column(Integer, primary_key=True)
+    id = Column(Integer, primary_key=True, index=True)
     phase = Column(Integer)
     order = Column(Integer)
+
     position_id = Column(Integer, ForeignKey('position.id'))
     position = relationship("Position", back_populates="filter")
+
     method = Column("method", Enum(FilterMethod))
+
     type = Column(String(50))
 
     __mapper_args__ = {
@@ -327,7 +360,7 @@ class Notch(Filter):
 class FrequenciesNotch(Base):
     __tablename__ = 'frequencies_notch'
 
-    id = Column(Integer, primary_key=True)
+    id = Column(Integer, primary_key=True, index=True)
     freq = Column(Float)
     notch_id = Column(Integer, ForeignKey('notch_filter.id'))
 
@@ -335,11 +368,12 @@ class FrequenciesNotch(Base):
 class TrainingModel(Base):
     __tablename__ = 'training_model'
 
-    id = Column(Integer, primary_key=True)
+    id = Column(Integer, primary_key=True, index=True)
     name = Column(String(255), index=True)
     path = Column(String(255), unique=True)
     training_data = Column(Float)
     test_data = Column(Float)
+
     experiment_id = Column(Integer, ForeignKey('experiment.id'))
     type = Column(String(50))
 
@@ -431,6 +465,6 @@ class Convolutional(Layer):
 class InputShape(Base):
     __tablename__ = 'input_shape'
 
-    id = Column(Integer, primary_key=True)
+    id = Column(Integer, primary_key=True, index=True)
     data = Column(Integer)
     convolutional_id = Column(Integer, ForeignKey('convolutional.id'))

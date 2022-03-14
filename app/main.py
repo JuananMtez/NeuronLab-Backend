@@ -1,10 +1,21 @@
 from fastapi import FastAPI
-from .routes.research_controller import research_controller
+from app.routes import researcher, experiment, subject, csv
 from .config.database import Base, engine
-from .models import models;
+from .models import models
+from fastapi.middleware.cors import CORSMiddleware
+
 
 models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
-
-app.include_router(research_controller)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=['*'],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+app.include_router(researcher.researcher_controller)
+app.include_router(experiment.experiment_controller)
+app.include_router(subject.subject_controller)
+app.include_router(csv.csv_controller)
