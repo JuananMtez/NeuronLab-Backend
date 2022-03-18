@@ -153,7 +153,7 @@ class Experiment(Base):
         secondary=Experiment_Subject,
         back_populates="experiments")
 
-    csvs = relationship("CSV")
+    csvs = relationship("CSV", cascade="save-update, delete")
 
     training_models = relationship("TrainingModel")
 
@@ -163,6 +163,7 @@ class Label(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     label = Column(String(255))
+    description = Column(String(255))
     experiment_id = Column(Integer, ForeignKey('experiment.id'))
 
 
@@ -189,6 +190,7 @@ class EEGHeadset(Device):
 
     id = Column(Integer, ForeignKey('device.id'), primary_key=True, index=True)
     channels = relationship("Channel", cascade="save-update, delete")
+    channels_count = Column(Integer)
 
     __mapper_args__ = {
         'polymorphic_identity': 'eeg_headset',
@@ -200,6 +202,7 @@ class Channel(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     channel = Column("channel", Enum(NameChannel))
+    position = Column(Integer)
 
     eeg_headset_id = Column(Integer, ForeignKey('eeg_headset.id'))
 
@@ -210,6 +213,7 @@ class Subject(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(255), index=True)
     surname = Column(String(255))
+    gender = Column(String(10))
     age = Column(Integer)
     total_experiments_performed = Column(Integer)
 

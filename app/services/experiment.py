@@ -7,6 +7,7 @@ from app.schemas.experiment import ExperimentPost, ExperimentResearchers, Experi
 from app.models import models
 from app.schemas.label import LabelPost
 from app.crud import subject as subject_crud
+import os
 
 
 def get_experiment_by_id(db: Session, experiment_id: int) -> models.Experiment:
@@ -29,15 +30,24 @@ def create_experiment(db: Session, experiment: ExperimentPost) -> Optional[Exper
                                       researcher_creator_id=experiment.researcher_creator_id)
 
     for x in experiment.labels:
-        db_experiment.labels.append(models.Label(label=x.label))
+        db_experiment.labels.append(models.Label(label=x.label,
+                                                 description=x.description))
 
     db_experiment.researchers.append(researcher)
 
+    for subject_id in experiment.subjects:
+        subject = subject_crud.find_by_id(db, subject_id)
+        if subject is not None:
+            db_experiment.subjects.append(subject)
+
     if experiment.device.type == 'eeg_headset':
         device = models.EEGHeadset(name=experiment.device.name,
-                                   sample_rate=experiment.device.sample_rate)
+                                   sample_rate=experiment.device.sample_rate,
+                                   channels_count=experiment.device.channels_count)
+
         for x in experiment.device.channels:
-            channel = models.Channel(channel=x.channel)
+            channel = models.Channel(channel=x.channel,
+                                     position=x.position)
             device.channels.append(channel)
 
         db_experiment.device = device
@@ -45,10 +55,14 @@ def create_experiment(db: Session, experiment: ExperimentPost) -> Optional[Exper
     return experiment_crud.save(db, db_experiment)
 
 
+
 def delete_experiment(db: Session, experiment_id: int) -> bool:
     experiment = experiment_crud.find_by_id(db, experiment_id)
     if experiment is None:
         return False
+
+    for c in experiment.csvs:
+        os.remove(c.path)
 
     experiment_crud.delete(db, experiment)
     return True

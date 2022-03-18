@@ -3,6 +3,7 @@ from app.schemas.researcher import ResearcherResponse
 from app.schemas.label import LabelPost, LabelResponse
 from app.schemas.device import EEGHeadsetResponse, DeviceResponse, EEGHeadsetPost
 from app.schemas.subject import SubjectResponse
+from app.schemas.csv import CSVResponse
 from typing import Union
 
 
@@ -15,6 +16,7 @@ class ExperimentPost(BaseModel):
     researcher_creator_id: int
     labels: list[LabelPost]
     device: device_post
+    subjects: list[int]
 
 
 class ExperimentResearchers(BaseModel):
@@ -29,6 +31,7 @@ device_response = Union[EEGHeadsetResponse, DeviceResponse]
 
 
 class ExperimentsListResponse(BaseModel):
+    id: int
     name: str
     description: str
 
@@ -45,6 +48,7 @@ class ExperimentResponse(BaseModel):
     labels: list[LabelResponse] = []
     device: device_response
     subjects: list[SubjectResponse] = []
+    csvs: list[CSVResponse] = []
 
     class Config:
         orm_mode = True

@@ -3,6 +3,7 @@ from app.schemas.subject import SubjectResponse, SubjectPost
 from app.models import models
 from app.crud import subject as subject_crud
 from typing import Optional
+from app.crud import experiment as experiment_crud
 
 
 def get_all_subjects(db:Session) -> list[SubjectResponse]:
@@ -13,12 +14,12 @@ def get_subjects(db:Session, subject_id: int) -> Optional[SubjectResponse]:
     return subject_crud.find_by_id(db, subject_id)
 
 
-
 def create_subject(db: Session, subject: SubjectPost) -> models.Subject:
 
     db_subject = models.Subject(name=subject.name,
                                 surname=subject.surname,
                                 age=subject.age,
+                                gender=subject.gender,
                                 total_experiments_performed=0)
 
     for x in subject.mental_conditions:
@@ -35,3 +36,23 @@ def delete_subject(db: Session, subject_id: int) -> bool:
 
     subject_crud.delete(db, subject)
     return True
+
+
+def get_all_subjects_not_experiment(db: Session, experiment_id: int) -> Optional[list[models.Subject]]:
+    experiment = experiment_crud.find_by_id(db, experiment_id)
+    if experiment is None:
+        return None
+
+    subjects = subject_crud.find_all(db)
+
+    returned = []
+    for s in subjects:
+        found = False
+        for t in experiment.subjects:
+            if s.id == t.id:
+                found = True
+                break
+        if not found:
+            returned.append(s)
+
+    return returned

@@ -41,8 +41,13 @@ async def get_researcher_id(researcher_id: int, db: Session = Depends(get_db)):
     return r
 
 
-@researcher_controller.patch("/{researcher_id}")
+@researcher_controller.patch("/{researcher_id}", response_model=ResearcherResponse)
 async def put_password_researcher(researcher_id: int, researcher_put: ResearcherPutPassword, db: Session = Depends(get_db)):
     if researcher_service.change_password(db, researcher_id, researcher_put) is None:
         raise HTTPException(status_code=404, detail="Researcher not found")
     return Response(status_code=HTTP_204_NO_CONTENT)
+
+
+@researcher_controller.get("/experiment/{experiment_id}", response_model=list[ResearcherResponse])
+async def get_all_researcher_not_experiment(experiment_id: int, db: Session = Depends(get_db)):
+    return researcher_service.get_all_researcher_not_experiment(db, experiment_id)

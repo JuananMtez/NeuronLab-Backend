@@ -6,6 +6,7 @@ from app.crud import csv as csv_crud
 from app.crud import experiment as experiment_crud
 from app.crud import subject as subject_crud
 from datetime import datetime
+import os
 from app.schemas.csv import CSVCopy
 
 import pandas as pd
@@ -36,7 +37,7 @@ def create_csv(db: Session, name: str, subject_id: int, experiment_id: int, file
     csv_reader.to_csv(name_file)
 
     db_csv = models.CSV(name=name,
-                        subject_name=subject.name,
+                        subject_name=subject.name + ' ' + subject.surname,
                         original=True,
                         experiment_id=experiment_id,
                         path=name_file)
@@ -52,6 +53,8 @@ def delete_csv(db: Session, csv_id: int) -> bool:
 
     if csv is None:
         return False
+
+    os.remove(csv.path)
 
     csv_crud.delete(db, csv)
     return True

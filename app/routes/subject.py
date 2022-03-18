@@ -36,3 +36,11 @@ async def delete_subject(subject_id: int, db: Session = Depends(get_db)):
     if not subject_service.delete_subject(db, subject_id):
         return Response(status_code=HTTP_404_NOT_FOUND)
     return Response(status_code=HTTP_204_NO_CONTENT)
+
+
+@subject_controller.get("/not/{experiment_id}", response_model=list[SubjectResponse])
+async def get_subjects_not_experiment(experiment_id: int, db: Session = Depends(get_db)):
+    subjects = subject_service.get_all_subjects_not_experiment(db, experiment_id)
+    if subjects is None:
+        raise HTTPException(status_code=404, detail="Experiment not found")
+    return subjects

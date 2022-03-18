@@ -31,6 +31,22 @@ def create_researcher(db: Session, researcher: ResearcherPost):
     return researcher_crud.save(db, db_researcher)
 
 
+def get_all_researcher_not_experiment(db: Session, experiment_id: int) -> list[models.Researcher]:
+    researchers = researcher_crud.find_all(db)
+    returned = []
+
+    for r in researchers:
+        found = False
+        for e in r.experiments:
+            if e.id == experiment_id:
+                found=True
+                break
+        if not found:
+            returned.append(r)
+
+    return returned
+
+
 def login(db: Session, researcher: ResearcherLogin) -> Optional[models.Researcher]:
     r = researcher_crud.find_by_user(db, researcher.user)
 
