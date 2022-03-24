@@ -82,30 +82,6 @@ class NameChannel(enum.Enum):
     IZ = 74
 
 
-class ICAMethod(enum.Enum):
-    fastica = 1
-
-
-class Kernel(enum.Enum):
-    linear = 1
-    poly = 2
-    rbf = 3
-
-
-class FilterMethod(enum.Enum):
-    IIR = 1
-    FIR = 2
-
-
-class Optimizer(enum.Enum):
-    SGD = 1
-
-
-class ActivationFunc(enum.Enum):
-    sigmoid = 1
-    softmax = 2
-
-
 Researcher_Experiment = Table('researcher_experiment', Base.metadata,
                               Column('researcher_id', ForeignKey('researcher.id'), primary_key=True),
                               Column('experiment_id', ForeignKey('experiment.id'), primary_key=True))
@@ -123,7 +99,7 @@ class Researcher(Base):
     surname = Column(String(255))
     email = Column(String(255), unique=True, index=True)
     user = Column(String(255), unique=True, index=True)
-    password = Column(String(255))
+    password = Column(String(255), index=True)
 
     experiments = relationship(
         "Experiment",
@@ -155,7 +131,7 @@ class Experiment(Base):
 
     csvs = relationship("CSV", cascade="save-update, delete")
 
-    training_models = relationship("TrainingModel")
+    #training_models = relationship("TrainingModel")
 
 
 class Label(Base):
@@ -238,22 +214,44 @@ class CSV(Base):
     id = Column(Integer, primary_key=True)
     name = Column(String(255))
     path = Column(String(255), unique=True)
-    original = Column(Boolean, default=False)
+    type = Column(String(255), index=True)
     subject_name = Column(String(255), index=True)
 
     experiment_id = Column(Integer, ForeignKey('experiment.id'))
 
-    positions = relationship("Position", cascade="save-update, delete")
+    preproccessing_list = relationship("Preproccessing", cascade="save-update, delete")
+    feature_extractions = relationship("FeatureExtraction", cascade="save-update, delete")
 
+class Preproccessing(Base):
+    __tablename__ = 'preproccessing'
+
+    id = Column(Integer, primary_key=True, index=True)
+    position = Column(Integer, unique=True, index=True)
+    preproccessing = Column(String(255))
+    description = Column(String(255))
+    csv_id = Column(Integer, ForeignKey('csv.id'))
+
+
+class FeatureExtraction(Base):
+    __tablename__ = 'feature_extraction'
+
+    id = Column(Integer, primary_key=True, index=True)
+    feature_extraction = Column(String(255))
+    position = Column(Integer, unique=True)
+    description = Column(String(255))
+
+    csv_id = Column(Integer, ForeignKey('csv.id'))
+
+
+'''
 
 class Position(Base):
     __tablename__ = 'position'
 
     id = Column(Integer, primary_key=True)
     position = Column(Integer)
-
+    specification = Column(String(255))
     csv_id = Column(Integer, ForeignKey('csv.id'))
-
     filter = relationship("Filter", back_populates="position", uselist=False)
     downsampling = relationship("Downsampling", back_populates="position", uselist=False)
     ica = relationship("ICA", back_populates="position", uselist=False)
@@ -310,7 +308,7 @@ class Filter(Base):
     position_id = Column(Integer, ForeignKey('position.id'))
     position = relationship("Position", back_populates="filter")
 
-    method = Column("method", Enum(FilterMethod))
+    method = Column(String(255))
 
     type = Column(String(50))
 
@@ -472,3 +470,4 @@ class InputShape(Base):
     id = Column(Integer, primary_key=True, index=True)
     data = Column(Integer)
     convolutional_id = Column(Integer, ForeignKey('convolutional.id'))
+'''
