@@ -6,80 +6,101 @@ import enum
 
 
 class NameChannel(enum.Enum):
-    NZ = 1
-    Fp1 = 2
-    FpZ = 3
-    Fp2 = 4
+    Fp1 = 1
+    FpZ = 2
+    Fp2 = 3
+    AF9 = 4
     AF7 = 5
-    AF3 = 6
-    AFZ = 7
-    AF4 = 8
-    AF8 = 9
-    F9 = 10
-    F7 = 11
-    F5 = 12
-    F3 = 13
-    Fz = 14
-    F2 = 15
-    F4 = 16
-    F6 = 17
-    F8 = 18
-    F10 = 19
-    FT9 = 20
-    FT7 = 21
-    FC5 = 22
-    FC3 = 23
-    FC1 = 24
-    FCZ = 25
-    FC2 = 26
-    FC4 = 27
-    FC6 = 28
-    FC8 = 29
-    FC10 = 30
-    A1 = 31
-    T9 = 32
-    T7 = 33
-    C5 = 34
-    C3 = 35
-    C1 = 36
-    Cz = 37
-    C2 = 38
-    C4 = 39
-    C6 = 40
-    T8 = 41
-    T10 = 42
-    A2 = 43
-    TP9 = 44
-    TP7 = 45
-    CP5 = 46
-    CP3 = 47
-    CP1 = 48
-    CPZ = 49
-    CP2 = 50
-    CP4 = 51
-    CP6 = 52
-    CP8 = 53
-    CP10 = 54
-    P9 = 55
-    P7 = 56
-    P5 = 57
-    P3 = 58
-    P1 = 59
-    Pz = 60
-    P2 = 61
-    P4 = 62
-    P6 = 63
-    P8 = 64
-    P10 = 65
-    PO7 = 66
-    PO3 = 67
-    POZ = 68
-    PO4 = 69
-    PO8 = 70
-    O1 = 71
-    OZ = 72
-    O2 = 73
-    IZ = 74
+    AF5 = 6
+    AF3 = 7
+    AF1 = 8
+    AFZ = 9
+    AF2 = 10
+    AF4 = 11
+    AF6 = 12
+    AF8 = 13
+    AF10 = 14
+    F9 = 15
+    F7 = 16
+    F5 = 17
+    F3 = 18
+    F1 = 19
+    Fz = 20
+    F2 = 21
+    F4 = 22
+    F6 = 23
+    F8 = 24
+    F10 = 25
+    FT9 = 26
+    FT7 = 27
+    FC5 = 28
+    FC3 = 29
+    FC1 = 30
+    FCZ = 31
+    FC2 = 32
+    FC4 = 33
+    FC6 = 34
+    FT8 = 35
+    FT10 = 36
+    T9 = 37
+    T7 = 38
+    C5 = 39
+    C3 = 40
+    C1 = 41
+    Cz = 42
+    C2 = 43
+    C4 = 44
+    C6 = 45
+    T8 = 46
+    T10 = 47
+    TP9 = 48
+    TP7 = 49
+    CP5 = 50
+    CP3 = 51
+    CP1 = 52
+    CPZ = 53
+    CP2 = 54
+    CP4 = 55
+    CP6 = 56
+    TP8 = 57
+    TP10 = 58
+    P9 = 59
+    P7 = 60
+    P5 = 61
+    P3 = 62
+    P1 = 63
+    Pz = 64
+    P2 = 65
+    P4 = 66
+    P6 = 67
+    P8 = 68
+    P10 = 69
+    PO9 = 70
+    PO7 = 71
+    PO5 = 72
+    PO3 = 73
+    PO1 = 74
+    POZ = 75
+    PO2 = 76
+    PO4 = 77
+    PO6 = 78
+    PO8 = 79
+    PO10 = 80
+    O1 = 81
+    OZ = 82
+    O2 = 83
+    O9 = 84
+    IZ = 85
+    O10 = 86
+    T3 = 87
+    T5 = 88
+    T4 = 89
+    T6 = 90
+    M1 = 91
+    M2 = 92
+    A1 = 93
+    A2 = 94
+
 
 
 Researcher_Experiment = Table('researcher_experiment', Base.metadata,
@@ -131,7 +152,7 @@ class Experiment(Base):
 
     csvs = relationship("CSV", cascade="save-update, delete")
 
-    #training_models = relationship("TrainingModel")
+    trainings = relationship("Training", cascade="save-update, delete")
 
 
 class Label(Base):
@@ -208,6 +229,11 @@ class MentalCondition(Base):
     subject_id = Column(Integer, ForeignKey('subject.id'))
 
 
+CSV_Training = Table('csv_training', Base.metadata,
+         Column('csv_id', ForeignKey('csv.id'), primary_key=True),
+         Column('training_id', ForeignKey('training.id'), primary_key=True))
+
+
 class CSV(Base):
     __tablename__ = 'csv'
 
@@ -222,11 +248,17 @@ class CSV(Base):
     preproccessing_list = relationship("Preproccessing", cascade="save-update, delete")
     feature_extractions = relationship("FeatureExtraction", cascade="save-update, delete")
 
+    trainings = relationship(
+        "Training",
+        secondary=CSV_Training,
+        back_populates="csvs")
+
+
 class Preproccessing(Base):
     __tablename__ = 'preproccessing'
 
     id = Column(Integer, primary_key=True, index=True)
-    position = Column(Integer, unique=True, index=True)
+    position = Column(Integer, index=True)
     preproccessing = Column(String(255))
     description = Column(String(255))
     csv_id = Column(Integer, ForeignKey('csv.id'))
@@ -241,6 +273,25 @@ class FeatureExtraction(Base):
     description = Column(String(255))
 
     csv_id = Column(Integer, ForeignKey('csv.id'))
+
+
+class Training(Base):
+    __tablename__ = 'training'
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(255))
+    description = Column(String(500))
+    preproccesing_description = Column(String(255), index=True)
+    path = Column(String(255), unique=True)
+    experiment_id = Column(Integer, ForeignKey('experiment.id'))
+
+    csvs = relationship(
+        "CSV",
+        secondary=CSV_Training,
+        back_populates="trainings")
+
+
+
 
 
 '''

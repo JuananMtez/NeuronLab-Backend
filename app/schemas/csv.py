@@ -10,6 +10,8 @@ class CSVFiltering(BaseModel):
     preproccessing: str
     filter_type: str
     filter_method: str
+    order: str
+    phase: str
 
 
 
@@ -19,12 +21,12 @@ class CSVBandpass(CSVFiltering):
 
 
 class CSVNotch(CSVFiltering):
-    freqs: list[str]
+    freq: str
 
 
 class CSVDownsampling(BaseModel):
     preproccessing: str
-    freq: str
+    freq_downsampling: str
 
 
 proccessing = Union[CSVBandpass, CSVNotch, CSVDownsampling]

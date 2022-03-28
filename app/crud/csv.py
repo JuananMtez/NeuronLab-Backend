@@ -6,6 +6,11 @@ def find_by_id(db: Session, csv_id: int) -> models.CSV:
     return db.query(models.CSV).filter(models.CSV.id == csv_id).first()
 
 
+def find_by_path(db: Session, path: str) -> bool:
+    return db.query(models.CSV).filter(models.CSV.path == path).first() is not None
+
+
+
 def save(db: Session, csv: models.CSV) -> models.CSV:
     db.add(csv)
     db.commit()
