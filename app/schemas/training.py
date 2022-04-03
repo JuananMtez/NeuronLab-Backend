@@ -28,15 +28,19 @@ class DeepLearning(BaseModel):
 class MachineLearningPost(BaseModel):
     csvs: list[int]
     name: str
-    testing_data: int
-    training_data: int
+    #testing_data: int
+    training_data: float
     algorithm: algorithm_machine
-
+    exp_id: int
 
 class TrainingResponse(BaseModel):
     id: int
     name: str
     description: str
+    training_data: str
 
     class Config:
         orm_mode = True
+
+class PredictResponse(BaseModel):
+    text: str

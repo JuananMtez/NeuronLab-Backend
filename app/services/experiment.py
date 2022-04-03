@@ -25,9 +25,12 @@ def create_experiment(db: Session, experiment: ExperimentPost) -> Optional[Exper
     if researcher is None or is_label_duplicated(experiment.labels) or not valid_device(experiment.device.type):
         return None
 
+
     db_experiment = models.Experiment(name=experiment.name,
                                       description=experiment.description,
-                                      researcher_creator_id=experiment.researcher_creator_id)
+                                      researcher_creator_id=experiment.researcher_creator_id,
+                                      epoch_start=experiment.epoch_start,
+                                      epoch_end=experiment.epoch_end)
 
     for x in experiment.labels:
         db_experiment.labels.append(models.Label(label=x.label,
@@ -55,14 +58,16 @@ def create_experiment(db: Session, experiment: ExperimentPost) -> Optional[Exper
     return experiment_crud.save(db, db_experiment)
 
 
-
 def delete_experiment(db: Session, experiment_id: int) -> bool:
     experiment = experiment_crud.find_by_id(db, experiment_id)
     if experiment is None:
         return False
 
     for c in experiment.csvs:
-        os.remove(c.path)
+        try:
+            os.remove(c.path)
+        except FileNotFoundError:
+            pass
 
     experiment_crud.delete(db, experiment)
     return True
@@ -154,3 +159,7 @@ def valid_device(type: str) -> bool:
     if type == 'eeg_headset':
         return True
     return False;
+
+
+
+

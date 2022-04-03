@@ -18,6 +18,10 @@ from mne.io import RawArray
 import mne
 import base64
 import app.crud.training as training_crud
+from app.schemas.epoch import EpochPlot, EpochAverage, EpochCompare, EpochActivity
+import matplotlib.pyplot as plt
+import math
+
 
 
 def get_csv_by_id(db: Session, csv_id: int) -> Optional[models.CSV]:
@@ -60,7 +64,6 @@ def create_csv(db: Session, name: str, subject_id: int, experiment_id: int, time
         "timestamp": [],
         "stimuli": []
     }
-    name_file = generate_name_csv(db)
 
     for file in files:
         aux = json.loads(file.file.read())
@@ -68,22 +71,42 @@ def create_csv(db: Session, name: str, subject_id: int, experiment_id: int, time
         object["timestamp"].extend(aux["timestamp"])
         object["stimuli"].extend(aux["stimuli"])
 
-    for stimulus in object["stimuli"]:
-        cont = 0
-        for label in exp.labels:
-            if stimulus[0][0] != int(label.label):
-                cont += 1
-        if cont == len(exp.labels):
-            return None
+        for stimulus in object["stimuli"]:
+            cont = 0
+            for label in exp.labels:
+                if stimulus[0][0] != int(label.label):
+                    cont += 1
+            if cont == len(exp.labels):
+                return None
 
+    name_file = generate_name_csv(db)
+    df = None
     if exp.device.type == 'eeg_headset':
-        create_csv_eegheadset(object, exp, name_file, time_correction)
+        df = create_csv_eegheadset(object, exp, name_file, time_correction)
+
+    rawdata = load_raw(df, exp)
+    events = mne.find_events(rawdata, shortest_event=1)
+    event_id = {}
+    for label in exp.labels:
+        event_id[label.description] = int(label.label)
+
+
+    epochs = mne.Epochs(rawdata, events=events, event_id=event_id, tmin=exp.epoch_start, tmax=exp.epoch_end)
+
+    str_epoch_list = str(epochs).split(',')
+    str_epoch = str_epoch_list[len(str_epoch_list)-1].replace('\n', '').replace('\'', '')
+    str_epoch = str_epoch[1:]
+    str_epoch = str_epoch[:-1]
 
     db_csv = models.CSV(name=name,
                         subject_name=subject.name + ' ' + subject.surname,
                         type='original',
                         experiment_id=experiment_id,
-                        path=name_file)
+                        path=name_file,
+                        date=name_file[12:31],
+                        duraction=df.shape[0]/exp.device.sample_rate,
+                        events=len(events),
+                        epochs=str_epoch)
 
     subject.total_experiments_performed = subject.total_experiments_performed + 1
     subject_crud.save(db, subject)
@@ -96,8 +119,10 @@ def delete_csv(db: Session, csv_id: int) -> bool:
 
     if csv is None:
         return False
-
-    os.remove(csv.path)
+    try:
+        os.remove(csv.path)
+    except FileNotFoundError:
+        pass
     for training in csv.trainings:
         if len(training.csvs) == 1:
             training_crud.delete(db, training)
@@ -124,7 +149,11 @@ def csv_copy(db: Session, csv_id: int, csv_copy: CSVCopy) -> Optional[models.CSV
                         subject_name=csv_original.subject_name,
                         type='copied',
                         experiment_id=csv_original.experiment_id,
-                        path=name_file)
+                        path=name_file,
+                        date=name_file[12:31],
+                        duraction=csv_original.duraction,
+                        epochs=csv_original.epochs,
+                        events=csv_original.events)
 
     for x in csv_original.preproccessing_list:
         db_preproccessing = models.Preproccessing(
@@ -159,34 +188,13 @@ def apply_preproccessing(db: Session, csv_filters: CSVFilters):
 
             df = pd.read_csv(csv.path)
             rawdata = load_raw(df, exp)
-            name_file = generate_name_csv(db)
-            if csv.type == 'copied' or csv.type == 'copied | preproccessed':
-                type = 'copied | preproccessed'
-            else:
-                type = 'preproccessed'
 
-
-
-            new_csv = models.CSV(
-                            name=csv.name + " (p)",
-                            subject_name=csv.subject_name,
-                            path=name_file,
-                            type=type,
-                            experiment_id=csv.experiment_id)
-
-            for x in csv.preproccessing_list:
-                db_preproccessing = models.Preproccessing(
-                    position=x.position,
-                    preproccessing=x.preproccessing,
-                    csv_id=new_csv.id,
-                    description=x.description)
-                new_csv.preproccessing_list.append(db_preproccessing)
 
             if rawdata is not None:
                 for prep in csv_filters.preproccessings:
                     if prep.__class__.__name__ == 'CSVBandpass':
                         try:
-                            rawdata = apply_bandpass(prep, rawdata, new_csv)
+                            rawdata = apply_bandpass(prep, rawdata, csv)
 
                         except ValueError:
                             return "Check frequency values"
@@ -194,56 +202,52 @@ def apply_preproccessing(db: Session, csv_filters: CSVFilters):
                             return "Array must not contain infs or NaNs"
                     elif prep.__class__.__name__ == 'CSVNotch':
                         try:
-                            rawdata = apply_notch(prep, rawdata, new_csv)
+                            rawdata = apply_notch(prep, rawdata, csv)
                         except ValueError:
                             return "Check frequency values"
                         except np.linalg.LinAlgError:
                             return "Array must not contain infs or NaNs"
                     elif prep.__class__.__name__ == 'CSVDownsampling':
                         try:
-                            rawdata = apply_downsampling(prep, rawdata, new_csv)
+                            rawdata = apply_downsampling(prep, rawdata, csv)
                         except ValueError:
                             return "Check frequency values"
                         except np.linalg.LinAlgError:
                             return "Array must not contain infs or NaNs"
+
+                os.remove(csv.path)
+                csv.path = generate_name_csv(db)
+                csv.date = csv.path[12:31]
+                csv.type = 'prep'
 
                 ch_names = []
                 for x in exp.device.channels:
                     ch_names.append(x.channel.name)
 
                 data = convert_to_df(rawdata, ch_names)
-                data.to_csv(new_csv.path, index=False)
 
-                csv_crud.save(db, new_csv)
-
-
-
+                data.to_csv(csv.path, index=False)
+                csv.duraction = data.shape[0]/exp.device.sample_rate
+                csv_crud.save(db, csv)
 
 
-def load_raw(data, experiment):
+def load_raw(df, experiment):
 
     if experiment.device.type == 'eeg_headset':
-        if "Timestamp" in data.columns:
-            del data['Timestamp']
-        ch_names = list(data.columns)[0:experiment.device.channels_count] + ['Stim']
+        if "Timestamp" in df.columns:
+            del df['Timestamp']
+        ch_names = list(df.columns)[0:experiment.device.channels_count] + ['Stim']
         ch_types = ['eeg'] * experiment.device.channels_count + ['stim']
 
         ch_ind = []
         for x in range(0, experiment.device.channels_count):
             ch_ind.append(x)
 
-        data = data.values[:, ch_ind + [experiment.device.channels_count]].T
-        #data[:-1] *= 1e-6
+        data = df.values[:, ch_ind + [experiment.device.channels_count]].T
 
-
-
-        info = mne.create_info(ch_names=ch_names, ch_types=ch_types,
-                           sfreq=experiment.device.sample_rate)
+        info = mne.create_info(ch_names=ch_names, ch_types=ch_types, sfreq=experiment.device.sample_rate)
         raw = RawArray(data=data, info=info)
-
-        montage = mne.channels.make_standard_montage('standard_1020')
-        raw.set_montage(montage, match_case=False)
-
+        raw.set_montage('standard_1020')
         return raw
 
     return None
@@ -251,7 +255,7 @@ def load_raw(data, experiment):
 
 def apply_feature(db: Session, feature_post: FeaturePost):
     exp = None
-    data = None
+    new_df = None
     for csv_id in feature_post.csvs:
         csv = csv_crud.find_by_id(db, csv_id)
         if csv is None:
@@ -260,65 +264,49 @@ def apply_feature(db: Session, feature_post: FeaturePost):
             exp = experiment_crud.find_by_id(db, csv.experiment_id)
 
         df = pd.read_csv(csv.path)
-        name_file = generate_name_csv(db)
-
-        if csv.type == 'copied':
-            type = 'copied | feature'
-        elif csv.type == 'copied | preproccessed':
-            type = 'copied | preproccessed | feature'
-        elif csv.type == 'preproccessed':
-            type = 'preproccessed | feature'
-        else:
-            type = 'feature'
-
-        new_csv = models.CSV(
-            name=csv.name + " (f)",
-            subject_name=csv.subject_name,
-            path=name_file,
-            type=type,
-            experiment_id=csv.experiment_id)
-
-        for x in csv.preproccessing_list:
-            db_preproccessing = models.Preproccessing(
-                position=x.position,
-                preproccessing=x.preproccessing,
-                csv_id=new_csv.id,
-                description=x.description)
-            new_csv.preproccessing_list.append(db_preproccessing)
-
-        for x in csv.feature_extractions:
-            db_f = models.FeatureExtraction(
-                position=x.position,
-                csv_id=new_csv.id,
-                description=x.description,
-                feature_extraction=x.feature_extraction)
-            new_csv.feature_extractions.append(db_f)
-
 
         if feature_post.feature == 'mean':
-            data = apply_mean(exp, df)
+            new_df = apply_mean(exp, df)
             db_f = models.FeatureExtraction(
-                position=len(new_csv.feature_extractions)+1,
-                csv_id=new_csv.id,
-                description="Mean",
+                csv_id=csv.id,
                 feature_extraction="Mean")
-            new_csv.feature_extractions.append(db_f)
+            csv.feature_extractions.append(db_f)
 
         elif feature_post.feature == 'variance':
-            data = apply_variance(exp, df)
+            new_df = apply_variance(exp, df)
             db_f = models.FeatureExtraction(
-                position=len(new_csv.feature_extractions) + 1,
-                csv_id=new_csv.id,
-                description="Variance",
+                csv_id=csv.id,
                 feature_extraction="Variance")
+            csv.feature_extractions.append(db_f)
 
+        elif feature_post.feature == 'deviation':
+            new_df = apply_standard_deviation(exp, df)
+            db_f = models.FeatureExtraction(
+                csv_id=csv.id,
+                feature_extraction="Standard Deviation")
+            csv.feature_extractions.append(db_f)
 
-        data.to_csv(name_file, index=False)
+        elif feature_post.feature == 'psd':
+            new_df = apply_psd(exp, df)
+            db_f = models.FeatureExtraction(
+                csv_id=csv.id,
+                feature_extraction="Power Spectral Density")
+            csv.feature_extractions.append(db_f)
 
+        name_file = generate_name_csv(db)
 
+        os.remove(csv.path)
+        csv.path = generate_name_csv(db)
+        csv.date = csv.path[12:31]
+        csv.duraction = 0
 
-        csv_crud.save(db, new_csv)
+        if csv.type == 'prep':
+            csv.type = 'prep | feature'
+        else:
+            csv.type = 'feature'
 
+        new_df.to_csv(name_file, index=False)
+        csv_crud.save(db, csv)
 
 
 def generate_name_csv(db: Session):
@@ -329,6 +317,7 @@ def generate_name_csv(db: Session):
         name_file = "csvs/record_{}.csv".format(now.strftime("%d-%m-%Y-%H-%M-%S"))
 
     return name_file
+
 
 def generate_name_tmp():
     now = datetime.now()
@@ -349,7 +338,6 @@ def create_csv_eegheadset(obj: Any, exp: models.Experiment, name_file: str, time
     data = pd.DataFrame(data=obj["dataInput"], columns=['Timestamp'] + ch_names)
 
     if len(obj["stimuli"]) != 0:
-        #data['Stimulus'] = 0
         data.loc[:, 'Stimulus'] = 0
         for estim in obj["stimuli"]:
             abs = np.abs(estim[1] - obj["timestamp"])
@@ -357,6 +345,8 @@ def create_csv_eegheadset(obj: Any, exp: models.Experiment, name_file: str, time
             data.loc[ix, 'Stimulus'] = estim[0][0]
 
     data.to_csv(name_file, index=False)
+
+    return data
 
 
 def apply_bandpass(prep, rawdata, new_csv):
@@ -371,7 +361,6 @@ def apply_bandpass(prep, rawdata, new_csv):
     if prep.high_freq != '':
         h_freq = float(prep.high_freq)
         text = text + 'High Frequency: ' + prep.high_freq + 'Hz '
-
 
     if prep.filter_method == 'fir':
         db_preproccessing = models.Preproccessing(
@@ -447,12 +436,10 @@ def apply_downsampling(prep, rawdata, new_csv):
 
 
 def convert_to_df(rawdata, ch_names) -> pd.DataFrame:
-    data = pd.DataFrame(data=rawdata.get_data().T, columns=ch_names + ['Stimulus'])
-    scalar = pd.to_numeric(data['Stimulus'], errors='coerce', downcast='integer')
-    del data['Stimulus']
-    data['Stimulus'] = scalar
-    return data
-
+    #scalar = pd.to_numeric(data['Stimulus'], errors='coerce', downcast='integer')
+    #del data['Stimulus']
+    #data['Stimulus'] = scalar
+    return pd.DataFrame(data=rawdata.get_data().T, columns=ch_names + ['Stimulus'])
 
 
 def plot_properties_ica(db: Session, csv_id, ica_method: ICAMethod):
@@ -551,28 +538,6 @@ def components_exclude_ica(db: Session, csv_id: int, arg: ICAExclude):
     ica.exclude = arg.components
     ica.apply(rawdata.copy())
 
-    if csv.type == 'copied' or csv.type == 'copied | preproccessed':
-        type = 'copied | preproccessed'
-    else:
-        type = 'preproccessed'
-
-    name_file = generate_name_csv(db)
-
-
-    new_csv = models.CSV(
-        name=csv.name + " (p)",
-        subject_name=csv.subject_name,
-        path=name_file,
-        type=type,
-        experiment_id=csv.experiment_id)
-
-    for x in csv.preproccessing_list:
-        db_preproccessing = models.Preproccessing(
-            position=x.position,
-            preproccessing=x.preproccessing,
-            csv_id=new_csv.id,
-            description=x.description)
-        new_csv.preproccessing_list.append(db_preproccessing)
 
     text = 'Components removed: '
     for x in arg.components:
@@ -582,22 +547,30 @@ def components_exclude_ica(db: Session, csv_id: int, arg: ICAExclude):
     text = text[:-1]
 
     db_preproccessing = models.Preproccessing(
-        position=len(new_csv.preproccessing_list) + 1,
+        position=len(csv.preproccessing_list) + 1,
         preproccessing='ICA',
-        csv_id=new_csv.id,
+        csv_id=csv.id,
         description=text)
-    new_csv.preproccessing_list.append(db_preproccessing)
+    csv.preproccessing_list.append(db_preproccessing)
+
 
     ch_names = []
     for x in exp.device.channels:
         ch_names.append(x.channel.name)
     data = convert_to_df(rawdata, ch_names)
-    data.to_csv(new_csv.path, index=False)
 
-    csv_crud.save(db, new_csv)
+    os.remove(csv.path)
+    csv.path = generate_name_csv(db)
+    csv.date = csv.path[12:31]
+    csv.type = 'prep'
+    csv.duraction = data.shape[0]/exp.device.sample_rate
+
+    data.to_csv(csv.path, index=False)
+
+    csv_crud.save(db, csv)
 
 
-def get_csvs_same(db: Session, csv_id:int)-> Optional[list[models.CSV]]:
+def get_csvs_same_features(db: Session, csv_id:int)-> Optional[list[models.CSV]]:
     csv = csv_crud.find_by_id(db, csv_id)
     if csv is None:
         return None
@@ -607,26 +580,15 @@ def get_csvs_same(db: Session, csv_id:int)-> Optional[list[models.CSV]]:
 
     for c in all_csv:
         same = True
-        if len(c.preproccessing_list) == len(csv.preproccessing_list) and c.id != csv.id:
+        if len(c.feature_extractions) == len(csv.feature_extractions) and c.id != csv.id:
             i = 0
-            while i < len(c.preproccessing_list) and same == True:
-                if c.preproccessing_list[i].description == csv.preproccessing_list[i].description:
+            while i < len(c.feature_extractions) and same == True:
+                if c.feature_extractions[i].feature_extraction == csv.feature_extractions[i].feature_extraction:
                     i = i + 1
                 else:
                     same = False
         else:
             same = False
-
-        if same == True:
-            if len(c.feature_extractions) == len(csv.feature_extractions):
-                i = 0
-                while i < len(c.feature_extractions) and same == True:
-                    if c.feature_extractions[i].description == csv.feature_extractions[i].description:
-                        i = i + 1
-                    else:
-                        same = False
-            else:
-                same = False
 
         if same == True:
             returned.append(c)
@@ -639,20 +601,286 @@ def apply_mean(exp, df):
     if exp.device.type == 'eeg_headset':
         if "Timestamp" in df.columns:
             del df['Timestamp']
+        rawdata = load_raw(df, exp)
+        epochs = get_epoch(rawdata, exp)
+        data_epochs = epochs.get_data()
 
-        stimulus = df['Stimulus'].tolist()
-        del df['Stimulus']
-        df['Mean'] = df.iloc[:, 0:exp.device.channels_count].mean(axis=1)
-        df['Stimulus'] = stimulus
-    return df
+        array = []
+
+        for estim in (range(len(data_epochs))):
+            value_estim = 0
+            row = []
+            for x in (range(len(data_epochs[estim]) - 1) ):
+                sum = 0
+                for y in (range(len(data_epochs[estim][x]))):
+                    sum = sum + data_epochs[estim][x][y]
+                    if data_epochs[estim][len(data_epochs[estim]) - 1][y] != 0:
+                        value_estim = data_epochs[estim][len(data_epochs[estim]) - 1][y]
+                row.append(sum/len(data_epochs[estim][x]))
+            row.append(value_estim)
+            array.append(row)
+
+        ch_names = []
+        for x in exp.device.channels:
+            ch_names.append(x.channel.name + '_mean')
+        return pd.DataFrame(array, columns=ch_names + ['Stimulus'])
+
+
 
 def apply_variance(exp, df):
     if exp.device.type == 'eeg_headset':
         if "Timestamp" in df.columns:
             del df['Timestamp']
 
-        stimulus = df['Stimulus'].tolist()
-        del df['Stimulus']
-        df['Variance'] = df.iloc[:, 0:exp.device.channels_count].var(axis=1)
-        df['Stimulus'] = stimulus
-    return df
+        rawdata = load_raw(df, exp)
+        epochs = get_epoch(rawdata, exp)
+
+        data_epochs = epochs.get_data()
+
+        array = []
+
+        for estim in (range(len(data_epochs))):
+            value_estim = 0
+            row = []
+            for x in (range(len(data_epochs[estim]) - 1)):
+
+                sum = 0
+                var = 0
+
+                for y in (range(len(data_epochs[estim][x]))):
+                    sum = sum + data_epochs[estim][x][y]
+                    if data_epochs[estim][len(data_epochs[estim]) - 1][y] != 0:
+                        value_estim = data_epochs[estim][len(data_epochs[estim]) - 1][y]
+                mean = (sum / len(data_epochs[estim][x]))
+
+                for y2 in (range(len(data_epochs[estim][x]))):
+                    var = (data_epochs[estim][x][y2] - mean)**2
+                row.append(var/len(data_epochs[estim][x]))
+
+            row.append(value_estim)
+            array.append(row)
+
+        ch_names = []
+        for x in exp.device.channels:
+            ch_names.append(x.channel.name + '_variance')
+        return pd.DataFrame(array, columns=ch_names + ['Stimulus'])
+
+
+def apply_standard_deviation (exp, df):
+    if exp.device.type == 'eeg_headset':
+        if "Timestamp" in df.columns:
+            del df['Timestamp']
+
+        rawdata = load_raw(df, exp)
+        epochs = get_epoch(rawdata, exp)
+
+        data_epochs = epochs.get_data()
+
+        array = []
+
+        for estim in (range(len(data_epochs))):
+            value_estim = 0
+            row = []
+            for x in (range(len(data_epochs[estim]) - 1)):
+
+                sum = 0
+                var = 0
+
+                for y in (range(len(data_epochs[estim][x]))):
+                    sum = sum + data_epochs[estim][x][y]
+                    if data_epochs[estim][len(data_epochs[estim]) - 1][y] != 0:
+                        value_estim = data_epochs[estim][len(data_epochs[estim]) - 1][y]
+                mean = (sum / len(data_epochs[estim][x]))
+
+                for y2 in (range(len(data_epochs[estim][x]))):
+                    var = (data_epochs[estim][x][y2] - mean) ** 2
+                row.append(math.sqrt(var / len(data_epochs[estim][x])))
+
+            row.append(value_estim)
+            array.append(row)
+
+        ch_names = []
+        for x in exp.device.channels:
+            ch_names.append(x.channel.name + '_deviation_standard')
+        return pd.DataFrame(array, columns=ch_names + ['Stimulus'])
+
+
+def apply_psd (exp, df):
+
+    if exp.device.type == 'eeg_headset':
+        if "Timestamp" in df.columns:
+            del df['Timestamp']
+
+        rawdata = load_raw(df, exp)
+        epochs = get_epoch(rawdata, exp)
+
+        prueba = mne.time_frequency.psd_welch(epochs, n_per_seg=256, picks='eeg')
+        return None
+
+
+
+def plot_chart(db: Session, csv_id: int, beginning:int, duraction:int):
+
+    csv = csv_crud.find_by_id(db, csv_id)
+
+    if csv is None:
+        return None
+
+    exp = experiment_crud.find_by_id(db, csv.experiment_id)
+
+    file = pd.read_csv(csv.path)
+
+    values = file.iloc[int(beginning * exp.device.sample_rate): int((beginning * exp.device.sample_rate) + (duraction * exp.device.sample_rate))].transpose().values.tolist()
+
+    if len(csv.preproccessing_list) == 0 and len(csv.feature_extractions) == 0:
+        del values[0]
+
+    returned = []
+
+
+    for i in (range(len(values) - 1)):
+        unidimensional = []
+        for j in (range(len(values[i]))):
+            dict = {"pv": values[i][j] }
+            unidimensional.append(dict)
+        returned.append(unidimensional)
+
+
+    stimulus = []
+    for i in (range(len(values[len(values)-1]))):
+        if values[len(values)-1][i] != 0:
+            stimulus.append({"x": i, "stim": values[len(values)-1][i]})
+
+    returned.append(stimulus)
+    return returned
+
+
+def plot_epochs(db: Session, csv_id: int, epoch_plot: EpochPlot):
+
+    csv = csv_crud.find_by_id(db, csv_id)
+
+    if csv is None:
+        return None
+
+    exp = experiment_crud.find_by_id(db, csv.experiment_id)
+    if exp is None:
+        return None
+
+    df = pd.read_csv(csv.path)
+
+    rawdata = load_raw(df, exp)
+    epochs = get_epoch(rawdata, exp)
+
+    figure = epochs.plot(n_epochs=epoch_plot.n_events, scalings='auto', block=True)
+    figure.set_size_inches(11.5, 7.5)
+
+    name_tmp = generate_name_tmp()
+    figure.savefig(name_tmp)
+
+    with open(name_tmp, 'rb') as f:
+        base64image = base64.b64encode(f.read())
+    os.remove(name_tmp)
+    return base64image
+
+
+def plot_average_epoch(db: Session, csv_id: int, epoch_average: EpochAverage):
+
+    csv = csv_crud.find_by_id(db, csv_id)
+
+    if csv is None:
+        return None
+
+    exp = experiment_crud.find_by_id(db, csv.experiment_id)
+    if exp is None:
+        return None
+
+    df = pd.read_csv(csv.path)
+
+    rawdata = load_raw(df, exp)
+    epochs = get_epoch(rawdata, exp)
+
+    average = epochs[epoch_average.label].average()
+    name_tmp = generate_name_tmp()
+    figure = average.plot(picks=epoch_average.channel, titles=dict(eeg='Channel ' + epoch_average.channel + ', Label: ' + epoch_average.label))
+    figure.set_size_inches(11.5, 5)
+
+    figure.savefig(name_tmp)
+
+    with open(name_tmp, 'rb') as f:
+        base64image = base64.b64encode(f.read())
+    os.remove(name_tmp)
+    return base64image
+
+
+def plot_compare(db: Session, csv_id: int, epoch_compare: EpochCompare):
+
+    csv = csv_crud.find_by_id(db, csv_id)
+
+    if csv is None:
+        return None
+
+    exp = experiment_crud.find_by_id(db, csv.experiment_id)
+    if exp is None:
+        return None
+
+    df = pd.read_csv(csv.path)
+
+    rawdata = load_raw(df, exp)
+    epochs = get_epoch(rawdata, exp)
+
+    average = epochs[epoch_compare.label].average()
+    name_tmp = generate_name_tmp()
+
+    figure, ax = plt.subplots()
+
+    mne.viz.plot_compare_evokeds(dict(target=average), axes=ax, title='Label: ' + epoch_compare.label,
+                                show_sensors='upper right')
+    figure.set_size_inches(11.5, 5)
+
+    figure.savefig(name_tmp)
+
+    with open(name_tmp, 'rb') as f:
+        base64image = base64.b64encode(f.read())
+    os.remove(name_tmp)
+    return base64image
+
+
+def plot_activity_brain(db: Session, csv_id: int, epoch_activity: EpochActivity):
+
+    csv = csv_crud.find_by_id(db, csv_id)
+
+    if csv is None:
+        return None
+
+    exp = experiment_crud.find_by_id(db, csv.experiment_id)
+    if exp is None:
+        return None
+
+    df = pd.read_csv(csv.path)
+    rawdata = load_raw(df, exp)
+
+    epochs = get_epoch(rawdata, exp)
+    average = epochs[epoch_activity.label].average()
+    name_tmp = generate_name_tmp()
+
+    figure = average.plot_topomap(times=epoch_activity.times, ch_type='eeg', extrapolate=epoch_activity.extrapolate)
+
+    figure.set_size_inches(11.5, 5)
+
+    figure.savefig(name_tmp)
+
+    with open(name_tmp, 'rb') as f:
+        base64image = base64.b64encode(f.read())
+    os.remove(name_tmp)
+    return base64image
+
+
+def get_epoch(rawdata, exp):
+
+    events = mne.find_events(rawdata, shortest_event=1)
+    event_id = {}
+    for label in exp.labels:
+        event_id[label.description] = int(label.label)
+
+    return mne.Epochs(rawdata, events=events, event_id=event_id, tmin=exp.epoch_start, tmax=exp.epoch_end,
+                        preload=True)

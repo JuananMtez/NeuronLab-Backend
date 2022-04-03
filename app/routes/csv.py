@@ -3,6 +3,7 @@ from ..config.database import get_db
 from starlette.status import HTTP_204_NO_CONTENT, HTTP_404_NOT_FOUND
 from app.schemas.csv import CSVResponse, CSVCopy, CSVFilters
 from app.schemas.preproccessing import PreproccessingResponse, ICAMethod, ICAExclude
+from app.schemas.epoch import EpochPlot, EpochAverage, EpochCompare, EpochActivity
 from app.schemas.feature_extraction import FeaturesResponse, FeaturePost
 from app.services import csv as csv_service
 from fastapi.responses import FileResponse
@@ -91,13 +92,14 @@ async def apply_feature(feature_post: FeaturePost, db=Depends(get_db)):
     return Response(status_code=HTTP_204_NO_CONTENT)
 
 
-@csv_controller.post("/{csv_id}/ica/plot/components")
-async def plot_components_ica(csv_id: int, ica_method: ICAMethod, db=Depends(get_db)):
-    object = csv_service.plot_components_ica(db, csv_id, ica_method)
-    if object is None:
-        return Response(status_code=HTTP_404_NOT_FOUND)
+@csv_controller.post("/feature/list")
+async def apply_feature(feature_post: FeaturePost, db=Depends(get_db)):
+    text = csv_service.apply_feature(db, feature_post)
+    if text is not None:
+        raise HTTPException(status_code=500, detail=text)
+    return Response(status_code=HTTP_204_NO_CONTENT)
 
-    return object
+
 
 @csv_controller.post("/{csv_id}/ica/plot/properties")
 async def plot_properties_ica(csv_id: int, ica_method: ICAMethod, db=Depends(get_db)):
@@ -122,12 +124,52 @@ async def download_csv(csv_id: int, db=Depends(get_db)):
     return FileResponse(csv.path, filename=csv.name+".csv")
 
 
-@csv_controller.get("/{csv_id}/same", response_model=list[CSVResponse])
+@csv_controller.get("/{csv_id}/same_features", response_model=list[CSVResponse])
 async def download_csv(csv_id: int, db=Depends(get_db)):
-    csvs = csv_service.get_csvs_same(db, csv_id)
+    csvs = csv_service.get_csvs_same_features(db, csv_id)
     if csvs is None:
         return Response(status_code=HTTP_404_NOT_FOUND)
     return csvs
 
 
+@csv_controller.get("/{csv_id}/plot/chart")
+async def plot_chart(csv_id: int, beginning: int, duraction: int, db=Depends(get_db)):
+    data = csv_service.plot_chart(db, csv_id, beginning, duraction)
+    if data is None:
+        return Response(status_code=HTTP_404_NOT_FOUND)
+    return data
 
+@csv_controller.post("/{csv_id}/epoch/plot")
+async def plot_epoch(csv_id: int, epoch_plot: EpochPlot, db=Depends(get_db)):
+    img = csv_service.plot_epochs(db, csv_id, epoch_plot)
+    if img is None:
+        return Response(status_code=HTTP_404_NOT_FOUND)
+
+    return img
+
+
+@csv_controller.post("/{csv_id}/epoch/average/plot")
+async def plot_average(csv_id: int, epoch_average: EpochAverage, db=Depends(get_db)):
+    img = csv_service.plot_average_epoch(db, csv_id, epoch_average)
+    if img is None:
+        return Response(status_code=HTTP_404_NOT_FOUND)
+
+    return img
+
+
+@csv_controller.post("/{csv_id}/epoch/compare/plot")
+async def plot_compare(csv_id: int, epoch_compare: EpochCompare, db=Depends(get_db)):
+    img = csv_service.plot_compare(db, csv_id, epoch_compare)
+    if img is None:
+        return Response(status_code=HTTP_404_NOT_FOUND)
+
+    return img
+
+
+@csv_controller.post("/{csv_id}/epoch/activity/plot")
+async def plot_activity_brain(csv_id: int, epoch_activity: EpochActivity, db=Depends(get_db)):
+    img = csv_service.plot_activity_brain(db, csv_id, epoch_activity)
+    if img is None:
+        return Response(status_code=HTTP_404_NOT_FOUND)
+
+    return img

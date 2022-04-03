@@ -5,6 +5,7 @@ from app.schemas.device import EEGHeadsetResponse, DeviceResponse, EEGHeadsetPos
 from app.schemas.subject import SubjectResponse
 from app.schemas.csv import CSVResponse
 from typing import Union
+from decimal import Decimal
 
 
 device_post = Union[EEGHeadsetPost]
@@ -17,6 +18,8 @@ class ExperimentPost(BaseModel):
     labels: list[LabelPost]
     device: device_post
     subjects: list[int]
+    epoch_start: float
+    epoch_end: float
 
 
 class ExperimentResearchers(BaseModel):
@@ -49,6 +52,8 @@ class ExperimentResponse(BaseModel):
     device: device_response
     subjects: list[SubjectResponse] = []
     csvs: list[CSVResponse] = []
+    epoch_start: float
+    epoch_end: float
 
     class Config:
         orm_mode = True

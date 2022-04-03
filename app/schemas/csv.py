@@ -37,12 +37,15 @@ class CSVFilters(BaseModel):
     preproccessings: list[proccessing]
 
 
-
 class CSVResponse(BaseModel):
     id: int
     name: str
     type: str
     subject_name: str
+    date: str
+    duraction: int
+    events: int
+    epochs: str
 
     class Config:
         orm_mode = True

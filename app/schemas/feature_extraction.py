@@ -8,9 +8,8 @@ class FeaturePost(BaseModel):
 
 class FeaturesResponse(BaseModel):
     id: int
-    position: int
     feature_extraction: str
-    description: str
+
 
     class Config:
         orm_mode = True

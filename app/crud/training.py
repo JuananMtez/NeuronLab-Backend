@@ -2,7 +2,7 @@ from sqlalchemy.orm import Session
 from app.models import models
 
 
-def find_by_id(db: Session, training_id: int) -> models.Researcher:
+def find_by_id(db: Session, training_id: int) -> models.Training:
     return db.query(models.Training).filter(models.Training.id == training_id).first()
 
 

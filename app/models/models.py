@@ -7,14 +7,14 @@ import enum
 
 class NameChannel(enum.Enum):
     Fp1 = 1
-    FpZ = 2
+    Fpz = 2
     Fp2 = 3
     AF9 = 4
     AF7 = 5
     AF5 = 6
     AF3 = 7
     AF1 = 8
-    AFZ = 9
+    AFz = 9
     AF2 = 10
     AF4 = 11
     AF6 = 12
@@ -36,7 +36,7 @@ class NameChannel(enum.Enum):
     FC5 = 28
     FC3 = 29
     FC1 = 30
-    FCZ = 31
+    FCz = 31
     FC2 = 32
     FC4 = 33
     FC6 = 34
@@ -58,7 +58,7 @@ class NameChannel(enum.Enum):
     CP5 = 50
     CP3 = 51
     CP1 = 52
-    CPZ = 53
+    CPz = 53
     CP2 = 54
     CP4 = 55
     CP6 = 56
@@ -87,10 +87,10 @@ class NameChannel(enum.Enum):
     PO8 = 79
     PO10 = 80
     O1 = 81
-    OZ = 82
+    Oz = 82
     O2 = 83
     O9 = 84
-    IZ = 85
+    Iz = 85
     O10 = 86
     T3 = 87
     T5 = 88
@@ -135,6 +135,11 @@ class Experiment(Base):
     name = Column(String(255))
     description = Column(String(255))
     researcher_creator_id = Column(Integer)
+    epoch_start = Column(Float)
+    epoch_end = Column(Float)
+
+
+
 
     labels = relationship("Label", cascade="save-update, delete")
 
@@ -242,6 +247,13 @@ class CSV(Base):
     path = Column(String(255), unique=True)
     type = Column(String(255), index=True)
     subject_name = Column(String(255), index=True)
+    date = Column(String(255), unique=True)
+    duraction = Column(Integer)
+
+    epochs = Column(String(255))
+    events = Column(Integer)
+
+
 
     experiment_id = Column(Integer, ForeignKey('experiment.id'))
 
@@ -269,8 +281,8 @@ class FeatureExtraction(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     feature_extraction = Column(String(255))
-    position = Column(Integer, unique=True)
-    description = Column(String(255))
+    #position = Column(Integer)
+    #description = Column(String(255))
 
     csv_id = Column(Integer, ForeignKey('csv.id'))
 
@@ -281,7 +293,8 @@ class Training(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(255))
     description = Column(String(500))
-    preproccesing_description = Column(String(255), index=True)
+    training_data = Column(String(10))
+    features = Column(String(255))
     path = Column(String(255), unique=True)
     experiment_id = Column(Integer, ForeignKey('experiment.id'))
 

@@ -76,3 +76,6 @@ async def get_all_experiments_researcher(researcher_id: int, db=Depends(get_db))
         return Response(status_code=HTTP_404_NOT_FOUND)
     return experiments
 
+
+
+
