@@ -21,6 +21,7 @@ import app.crud.training as training_crud
 from app.schemas.epoch import EpochPlot, EpochAverage, EpochCompare, EpochActivity
 import matplotlib.pyplot as plt
 import math
+import shutil
 
 
 
@@ -137,33 +138,34 @@ def csv_copy(db: Session, csv_id: int, csv_copy: CSVCopy) -> Optional[models.CSV
     if csv_original is None:
         return None
 
-    try:
-        file = pd.read_csv(csv_original.path)
-    except FileNotFoundError:
-        return None
+
 
     name_file = generate_name_csv(db)
-    file.to_csv(name_file, index=False)
+    try:
+        shutil.copyfile(csv_original.path, name_file)
 
-    db_csv = models.CSV(name=csv_copy.name,
-                        subject_name=csv_original.subject_name,
-                        type='copied',
-                        experiment_id=csv_original.experiment_id,
-                        path=name_file,
-                        date=name_file[12:31],
-                        duraction=csv_original.duraction,
-                        epochs=csv_original.epochs,
-                        events=csv_original.events)
 
-    for x in csv_original.preproccessing_list:
-        db_preproccessing = models.Preproccessing(
-            position=x.position,
-            preproccessing=x.preproccessing,
-            csv_id=db_csv.id,
-            description=x.description)
-        db_csv.preproccessing_list.append(db_preproccessing)
+        db_csv = models.CSV(name=csv_copy.name,
+                            subject_name=csv_original.subject_name,
+                            type='copied',
+                            experiment_id=csv_original.experiment_id,
+                            path=name_file,
+                            date=name_file[12:31],
+                            duraction=csv_original.duraction,
+                            epochs=csv_original.epochs,
+                            events=csv_original.events)
 
-    return csv_crud.save(db, db_csv)
+        for x in csv_original.preproccessing_list:
+            db_preproccessing = models.Preproccessing(
+                position=x.position,
+                preproccessing=x.preproccessing,
+                csv_id=db_csv.id,
+                description=x.description)
+            db_csv.preproccessing_list.append(db_preproccessing)
+        return csv_crud.save(db, db_csv)
+
+    except:
+        return None
 
 
 def change_name(db: Session, csv_id: int, csv_copy: CSVCopy) -> Optional[models.CSV]:
