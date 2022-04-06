@@ -18,11 +18,11 @@ from mne.io import RawArray
 import mne
 import base64
 import app.crud.training as training_crud
-from app.schemas.epoch import EpochPlot, EpochAverage, EpochCompare, EpochActivity
+from app.schemas.epoch import EpochPlot, EpochAverage, EpochCompare, EpochActivity, EpochPSD
 import matplotlib.pyplot as plt
 import math
 import shutil
-
+from scipy.integrate import simps
 
 
 def get_csv_by_id(db: Session, csv_id: int) -> Optional[models.CSV]:
@@ -47,6 +47,7 @@ def get_all_csv_features(db: Session, csv_id: int) -> Optional[list[models.Featu
 
     return csv.feature_extractions
 
+
 def get_all_csv_experiment(db: Session, experiment_id: int) -> Optional[list[models.Experiment]]:
     e = experiment_crud.find_by_id(db, experiment_id)
     if e is None:
@@ -54,7 +55,8 @@ def get_all_csv_experiment(db: Session, experiment_id: int) -> Optional[list[mod
     return e.csvs
 
 
-def create_csv(db: Session, name: str, subject_id: int, experiment_id: int, time_correction: float, files: list[UploadFile]) -> Optional[models.CSV]:
+def create_csv(db: Session, name: str, subject_id: int, experiment_id: int,
+               time_correction: float, files: list[UploadFile]) -> Optional[models.CSV]:
     exp = experiment_crud.find_by_id(db, experiment_id)
     subject = subject_crud.find_by_id(db, subject_id)
     if exp is None or subject is None:
@@ -86,13 +88,15 @@ def create_csv(db: Session, name: str, subject_id: int, experiment_id: int, time
         df = create_csv_eegheadset(object, exp, name_file, time_correction)
 
     rawdata = load_raw(df, exp)
+
+
     events = mne.find_events(rawdata, shortest_event=1)
     event_id = {}
     for label in exp.labels:
         event_id[label.description] = int(label.label)
 
-
     epochs = mne.Epochs(rawdata, events=events, event_id=event_id, tmin=exp.epoch_start, tmax=exp.epoch_end)
+
 
     str_epoch_list = str(epochs).split(',')
     str_epoch = str_epoch_list[len(str_epoch_list)-1].replace('\n', '').replace('\'', '')
@@ -124,7 +128,13 @@ def delete_csv(db: Session, csv_id: int) -> bool:
         os.remove(csv.path)
     except FileNotFoundError:
         pass
+
     for training in csv.trainings:
+        try:
+            os.remove(training.path)
+        except FileNotFoundError:
+            pass
+
         if len(training.csvs) == 1:
             training_crud.delete(db, training)
 
@@ -138,12 +148,9 @@ def csv_copy(db: Session, csv_id: int, csv_copy: CSVCopy) -> Optional[models.CSV
     if csv_original is None:
         return None
 
-
-
     name_file = generate_name_csv(db)
     try:
         shutil.copyfile(csv_original.path, name_file)
-
 
         db_csv = models.CSV(name=csv_copy.name,
                             subject_name=csv_original.subject_name,
@@ -180,58 +187,53 @@ def change_name(db: Session, csv_id: int, csv_copy: CSVCopy) -> Optional[models.
 
 def apply_preproccessing(db: Session, csv_filters: CSVFilters):
     exp = None
+    text = ""
     for csv_id in csv_filters.csvs:
         csv = csv_crud.find_by_id(db, csv_id)
         if csv is not None:
-            if len(csv.feature_extractions) > 0:
-                return "In some csv have already applied feature extraction. Please, unselect"
-            if exp is None:
-                exp = experiment_crud.find_by_id(db, csv.experiment_id)
+            try:
 
-            df = pd.read_csv(csv.path)
-            rawdata = load_raw(df, exp)
+                if exp is None:
+                    exp = experiment_crud.find_by_id(db, csv.experiment_id)
 
+                df = pd.read_csv(csv.path)
+                rawdata = load_raw(df, exp)
+                del df
 
-            if rawdata is not None:
-                for prep in csv_filters.preproccessings:
-                    if prep.__class__.__name__ == 'CSVBandpass':
-                        try:
+                if rawdata is not None:
+                    for prep in csv_filters.preproccessings:
+                        if prep.__class__.__name__ == 'CSVBandpass':
                             rawdata = apply_bandpass(prep, rawdata, csv)
-
-                        except ValueError:
-                            return "Check frequency values"
-                        except np.linalg.LinAlgError:
-                            return "Array must not contain infs or NaNs"
-                    elif prep.__class__.__name__ == 'CSVNotch':
-                        try:
+                        elif prep.__class__.__name__ == 'CSVNotch':
                             rawdata = apply_notch(prep, rawdata, csv)
-                        except ValueError:
-                            return "Check frequency values"
-                        except np.linalg.LinAlgError:
-                            return "Array must not contain infs or NaNs"
-                    elif prep.__class__.__name__ == 'CSVDownsampling':
-                        try:
+                        elif prep.__class__.__name__ == 'CSVDownsampling':
                             rawdata = apply_downsampling(prep, rawdata, csv)
-                        except ValueError:
-                            return "Check frequency values"
-                        except np.linalg.LinAlgError:
-                            return "Array must not contain infs or NaNs"
+                    try:
+                        os.remove(csv.path)
+                    except FileNotFoundError:
+                        pass
+                    csv.path = generate_name_csv(db)
+                    csv.date = csv.path[12:31]
+                    csv.type = 'prep'
 
-                os.remove(csv.path)
-                csv.path = generate_name_csv(db)
-                csv.date = csv.path[12:31]
-                csv.type = 'prep'
+                    ch_names = []
+                    for x in exp.device.channels:
+                        ch_names.append(x.channel.name)
 
-                ch_names = []
-                for x in exp.device.channels:
-                    ch_names.append(x.channel.name)
+                    data = convert_to_df(rawdata, ch_names)
 
-                data = convert_to_df(rawdata, ch_names)
+                    data.to_csv(csv.path, index=False)
+                    csv.duraction = data.shape[0]/exp.device.sample_rate
+                    csv_crud.save(db, csv)
+                    text += csv.name + ": Preproccessing applied\n"
 
-                data.to_csv(csv.path, index=False)
-                csv.duraction = data.shape[0]/exp.device.sample_rate
-                csv_crud.save(db, csv)
 
+            except ValueError:
+                text += csv.name + ": Check frequency values\n"
+            except np.linalg.LinAlgError:
+                text += csv.name + ": Array must not contain infs or NaNs\n"
+
+    return text
 
 def load_raw(df, experiment):
 
@@ -258,6 +260,7 @@ def load_raw(df, experiment):
 def apply_feature(db: Session, feature_post: FeaturePost):
     exp = None
     new_df = None
+    text = ""
     for csv_id in feature_post.csvs:
         csv = csv_crud.find_by_id(db, csv_id)
         if csv is None:
@@ -265,50 +268,83 @@ def apply_feature(db: Session, feature_post: FeaturePost):
         if exp is None:
             exp = experiment_crud.find_by_id(db, csv.experiment_id)
 
-        df = pd.read_csv(csv.path)
+        try:
 
-        if feature_post.feature == 'mean':
-            new_df = apply_mean(exp, df)
-            db_f = models.FeatureExtraction(
-                csv_id=csv.id,
-                feature_extraction="Mean")
-            csv.feature_extractions.append(db_f)
+            df = pd.read_csv(csv.path)
+            if "Timestamp" in df.columns:
+                del df['Timestamp']
 
-        elif feature_post.feature == 'variance':
-            new_df = apply_variance(exp, df)
-            db_f = models.FeatureExtraction(
-                csv_id=csv.id,
-                feature_extraction="Variance")
-            csv.feature_extractions.append(db_f)
+            rawdata = load_raw(df, exp)
+            epochs = get_epoch(rawdata, exp)
 
-        elif feature_post.feature == 'deviation':
-            new_df = apply_standard_deviation(exp, df)
-            db_f = models.FeatureExtraction(
-                csv_id=csv.id,
-                feature_extraction="Standard Deviation")
-            csv.feature_extractions.append(db_f)
 
-        elif feature_post.feature == 'psd':
-            new_df = apply_psd(exp, df)
-            db_f = models.FeatureExtraction(
-                csv_id=csv.id,
-                feature_extraction="Power Spectral Density")
-            csv.feature_extractions.append(db_f)
+            if feature_post.feature == 'mean':
+                data_epochs = epochs.get_data()
+                del rawdata
+                del df
+                del epochs
 
-        name_file = generate_name_csv(db)
+                new_df = apply_mean(exp, data_epochs)
+                db_f = models.FeatureExtraction(
+                    csv_id=csv.id,
+                    feature_extraction="Mean")
+                csv.feature_extractions.append(db_f)
 
-        os.remove(csv.path)
-        csv.path = generate_name_csv(db)
-        csv.date = csv.path[12:31]
-        csv.duraction = 0
+            elif feature_post.feature == 'variance':
+                data_epochs = epochs.get_data()
+                del rawdata
+                del df
+                del epochs
+                new_df = apply_variance(exp, data_epochs)
+                db_f = models.FeatureExtraction(
+                    csv_id=csv.id,
+                    feature_extraction="Variance")
+                csv.feature_extractions.append(db_f)
 
-        if csv.type == 'prep':
-            csv.type = 'prep | feature'
-        else:
-            csv.type = 'feature'
+            elif feature_post.feature == 'deviation':
+                data_epochs = epochs.get_data()
+                del rawdata
+                del df
+                del epochs
+                new_df = apply_standard_deviation(exp, data_epochs)
+                db_f = models.FeatureExtraction(
+                    csv_id=csv.id,
+                    feature_extraction="Standard Deviation")
+                csv.feature_extractions.append(db_f)
 
-        new_df.to_csv(name_file, index=False)
-        csv_crud.save(db, csv)
+            else: #Always is PSD
+                del rawdata
+                del df
+                new_df = apply_psd(exp, epochs, feature_post.feature)
+                bands = feature_post.feature.split(',')
+                band_text = ""
+                for band in bands:
+                    band_text += band + ", "
+                band_text = band_text[:-2]
+                db_f = models.FeatureExtraction(
+                    csv_id=csv.id,
+                    feature_extraction="Power Spectral Density (" + band_text + ")")
+                csv.feature_extractions.append(db_f)
+
+            name_file = generate_name_csv(db)
+
+            os.remove(csv.path)
+            csv.path = generate_name_csv(db)
+            csv.date = csv.path[12:31]
+            csv.duraction = 0
+
+            if csv.type == 'prep':
+                csv.type = 'prep | feature'
+            else:
+                csv.type = 'feature'
+
+            new_df.to_csv(name_file, index=False)
+            csv_crud.save(db, csv)
+            text += csv.name + ": Extraction applied\n"
+
+        except:
+            text += csv.name + ": An error has ocurred\n"
+    return text
 
 
 def generate_name_csv(db: Session):
@@ -438,9 +474,6 @@ def apply_downsampling(prep, rawdata, new_csv):
 
 
 def convert_to_df(rawdata, ch_names) -> pd.DataFrame:
-    #scalar = pd.to_numeric(data['Stimulus'], errors='coerce', downcast='integer')
-    #del data['Stimulus']
-    #data['Stimulus'] = scalar
     return pd.DataFrame(data=rawdata.get_data().T, columns=ch_names + ['Stimulus'])
 
 
@@ -457,6 +490,7 @@ def plot_properties_ica(db: Session, csv_id, ica_method: ICAMethod):
     df = pd.read_csv(csv.path)
 
     rawdata = load_raw(df, exp)
+    del df
     fit_params = None
     if ica_method.method == 'picard':
         fit_params = dict(ortho=True, extended=True)
@@ -495,6 +529,7 @@ def plot_components_ica(db: Session, csv_id: int, ica_method: ICAMethod):
     df = pd.read_csv(csv.path)
 
     rawdata = load_raw(df, exp)
+    del df
     fit_params = None
     if ica_method.method == 'picard':
         fit_params = dict(ortho=True, extended=True)
@@ -528,6 +563,7 @@ def components_exclude_ica(db: Session, csv_id: int, arg: ICAExclude):
     df = pd.read_csv(csv.path)
 
     rawdata = load_raw(df, exp)
+    del df
     fit_params = None
     if arg.method == 'picard':
         fit_params = dict(ortho=True, extended=True)
@@ -598,126 +634,142 @@ def get_csvs_same_features(db: Session, csv_id:int)-> Optional[list[models.CSV]]
     return returned
 
 
-def apply_mean(exp, df):
+def apply_mean(exp, data_epochs):
 
-    if exp.device.type == 'eeg_headset':
-        if "Timestamp" in df.columns:
-            del df['Timestamp']
-        rawdata = load_raw(df, exp)
-        epochs = get_epoch(rawdata, exp)
-        data_epochs = epochs.get_data()
 
-        array = []
+    array = []
 
-        for estim in (range(len(data_epochs))):
-            value_estim = 0
-            row = []
-            for x in (range(len(data_epochs[estim]) - 1) ):
-                sum = 0
-                for y in (range(len(data_epochs[estim][x]))):
-                    sum = sum + data_epochs[estim][x][y]
-                    if data_epochs[estim][len(data_epochs[estim]) - 1][y] != 0:
-                        value_estim = data_epochs[estim][len(data_epochs[estim]) - 1][y]
-                row.append(sum/len(data_epochs[estim][x]))
-            row.append(value_estim)
-            array.append(row)
+    for estim in (range(len(data_epochs))):
+        value_estim = 0
+        row = []
+        for x in (range(len(data_epochs[estim]) - 1) ):
+            sum = 0
+            for y in (range(len(data_epochs[estim][x]))):
+                sum = sum + data_epochs[estim][x][y]
+                if data_epochs[estim][len(data_epochs[estim]) - 1][y] != 0:
+                    value_estim = data_epochs[estim][len(data_epochs[estim]) - 1][y]
+            row.append(sum/len(data_epochs[estim][x]))
+        row.append(value_estim)
+        array.append(row)
 
-        ch_names = []
-        for x in exp.device.channels:
-            ch_names.append(x.channel.name + '_mean')
-        return pd.DataFrame(array, columns=ch_names + ['Stimulus'])
+    ch_names = []
+    for x in exp.device.channels:
+        ch_names.append(x.channel.name + '_mean')
+    return pd.DataFrame(array, columns=ch_names + ['Stimulus'])
 
 
 
-def apply_variance(exp, df):
-    if exp.device.type == 'eeg_headset':
-        if "Timestamp" in df.columns:
-            del df['Timestamp']
-
-        rawdata = load_raw(df, exp)
-        epochs = get_epoch(rawdata, exp)
-
-        data_epochs = epochs.get_data()
-
-        array = []
-
-        for estim in (range(len(data_epochs))):
-            value_estim = 0
-            row = []
-            for x in (range(len(data_epochs[estim]) - 1)):
-
-                sum = 0
-                var = 0
-
-                for y in (range(len(data_epochs[estim][x]))):
-                    sum = sum + data_epochs[estim][x][y]
-                    if data_epochs[estim][len(data_epochs[estim]) - 1][y] != 0:
-                        value_estim = data_epochs[estim][len(data_epochs[estim]) - 1][y]
-                mean = (sum / len(data_epochs[estim][x]))
-
-                for y2 in (range(len(data_epochs[estim][x]))):
-                    var = (data_epochs[estim][x][y2] - mean)**2
-                row.append(var/len(data_epochs[estim][x]))
-
-            row.append(value_estim)
-            array.append(row)
-
-        ch_names = []
-        for x in exp.device.channels:
-            ch_names.append(x.channel.name + '_variance')
-        return pd.DataFrame(array, columns=ch_names + ['Stimulus'])
+def apply_variance(exp, data_epochs):
 
 
-def apply_standard_deviation (exp, df):
-    if exp.device.type == 'eeg_headset':
-        if "Timestamp" in df.columns:
-            del df['Timestamp']
+    array = []
 
-        rawdata = load_raw(df, exp)
-        epochs = get_epoch(rawdata, exp)
+    for estim in (range(len(data_epochs))):
+        value_estim = 0
+        row = []
+        for x in (range(len(data_epochs[estim]) - 1)):
 
-        data_epochs = epochs.get_data()
+            sum = 0
+            var = 0
 
-        array = []
+            for y in (range(len(data_epochs[estim][x]))):
+                sum = sum + data_epochs[estim][x][y]
+                if data_epochs[estim][len(data_epochs[estim]) - 1][y] != 0:
+                    value_estim = data_epochs[estim][len(data_epochs[estim]) - 1][y]
+            mean = (sum / len(data_epochs[estim][x]))
 
-        for estim in (range(len(data_epochs))):
-            value_estim = 0
-            row = []
-            for x in (range(len(data_epochs[estim]) - 1)):
+            for y2 in (range(len(data_epochs[estim][x]))):
+                var = (data_epochs[estim][x][y2] - mean)**2
+            row.append(var/len(data_epochs[estim][x]))
 
-                sum = 0
-                var = 0
+        row.append(value_estim)
+        array.append(row)
 
-                for y in (range(len(data_epochs[estim][x]))):
-                    sum = sum + data_epochs[estim][x][y]
-                    if data_epochs[estim][len(data_epochs[estim]) - 1][y] != 0:
-                        value_estim = data_epochs[estim][len(data_epochs[estim]) - 1][y]
-                mean = (sum / len(data_epochs[estim][x]))
-
-                for y2 in (range(len(data_epochs[estim][x]))):
-                    var = (data_epochs[estim][x][y2] - mean) ** 2
-                row.append(math.sqrt(var / len(data_epochs[estim][x])))
-
-            row.append(value_estim)
-            array.append(row)
-
-        ch_names = []
-        for x in exp.device.channels:
-            ch_names.append(x.channel.name + '_deviation_standard')
-        return pd.DataFrame(array, columns=ch_names + ['Stimulus'])
+    ch_names = []
+    for x in exp.device.channels:
+        ch_names.append(x.channel.name + '_variance')
+    return pd.DataFrame(array, columns=ch_names + ['Stimulus'])
 
 
-def apply_psd (exp, df):
+def apply_standard_deviation (exp, data_epochs):
 
-    if exp.device.type == 'eeg_headset':
-        if "Timestamp" in df.columns:
-            del df['Timestamp']
+    array = []
 
-        rawdata = load_raw(df, exp)
-        epochs = get_epoch(rawdata, exp)
+    for estim in (range(len(data_epochs))):
+        value_estim = 0
+        row = []
+        for x in (range(len(data_epochs[estim]) - 1)):
 
-        prueba = mne.time_frequency.psd_welch(epochs, n_per_seg=256, picks='eeg')
-        return None
+            sum = 0
+            var = 0
+
+            for y in (range(len(data_epochs[estim][x]))):
+                sum = sum + data_epochs[estim][x][y]
+                if data_epochs[estim][len(data_epochs[estim]) - 1][y] != 0:
+                    value_estim = data_epochs[estim][len(data_epochs[estim]) - 1][y]
+            mean = (sum / len(data_epochs[estim][x]))
+
+            for y2 in (range(len(data_epochs[estim][x]))):
+                var = (data_epochs[estim][x][y2] - mean) ** 2
+            row.append(math.sqrt(var / len(data_epochs[estim][x])))
+
+        row.append(value_estim)
+        array.append(row)
+
+    ch_names = []
+    for x in exp.device.channels:
+        ch_names.append(x.channel.name + '_deviation_standard')
+    return pd.DataFrame(array, columns=ch_names + ['Stimulus'])
+
+
+def apply_psd (exp, epochs, bands):
+    bands_array = bands.split(',')
+
+    psds, freqs = mne.time_frequency.psd_welch(epochs, n_per_seg=256, picks='eeg')
+    freq_result = freqs[1] - freqs[0]
+    ch_names = []
+
+    result = []
+    for i in range(len(psds)): # Epoch
+        epoch = []
+
+        for band in bands_array:
+            low = 0
+            high = 0
+            if band == 'beta':
+                low = 12
+                high = 30
+            if band == 'alpha':
+                low = 8
+                high = 12
+            if band == 'theta':
+                low = 4
+                high = 8
+            if band == 'delta':
+                low = 1
+                high = 4
+            idx_band = np.logical_and(freqs >= low, high <= freqs)
+            for j in range(len(psds[i])): # Channel
+                bp = simps(psds[i][j][idx_band], dx=freq_result)
+                epoch.append(bp)
+
+        z = 0
+        stim = -1
+        epochs_data = epochs.get_data()
+        while (z < len(epochs_data[i][len(epochs_data[i]) -1]) and stim == -1):
+            if epochs_data[i][len(epochs_data[i]) -1][z] != 0:
+                stim = epochs_data[i][len(epochs_data[i]) -1][z]
+            z = z +1
+
+        if stim != -1:
+            epoch.append(stim)
+        result.append(epoch)
+
+    for band in bands_array:
+        for ch in exp.device.channels:
+            ch_names.append(ch.channel.name + '_' + band)
+
+    return pd.DataFrame(result, columns=ch_names + ['Stimulus'])
 
 
 
@@ -733,7 +785,7 @@ def plot_chart(db: Session, csv_id: int, beginning:int, duraction:int):
     file = pd.read_csv(csv.path)
 
     values = file.iloc[int(beginning * exp.device.sample_rate): int((beginning * exp.device.sample_rate) + (duraction * exp.device.sample_rate))].transpose().values.tolist()
-
+    del file
     if len(csv.preproccessing_list) == 0 and len(csv.feature_extractions) == 0:
         del values[0]
 
@@ -773,6 +825,10 @@ def plot_epochs(db: Session, csv_id: int, epoch_plot: EpochPlot):
     rawdata = load_raw(df, exp)
     epochs = get_epoch(rawdata, exp)
 
+    del df
+    del rawdata
+
+
     figure = epochs.plot(n_epochs=epoch_plot.n_events, scalings='auto', block=True)
     figure.set_size_inches(11.5, 7.5)
 
@@ -801,6 +857,9 @@ def plot_average_epoch(db: Session, csv_id: int, epoch_average: EpochAverage):
     rawdata = load_raw(df, exp)
     epochs = get_epoch(rawdata, exp)
 
+    del df
+    del rawdata
+
     average = epochs[epoch_average.label].average()
     name_tmp = generate_name_tmp()
     figure = average.plot(picks=epoch_average.channel, titles=dict(eeg='Channel ' + epoch_average.channel + ', Label: ' + epoch_average.label))
@@ -828,7 +887,14 @@ def plot_compare(db: Session, csv_id: int, epoch_compare: EpochCompare):
     df = pd.read_csv(csv.path)
 
     rawdata = load_raw(df, exp)
+
     epochs = get_epoch(rawdata, exp)
+    epochs.plot_psd_topomap(ch_type='eeg', normalize=False)
+
+    del df
+    del rawdata
+
+    epochs.plot_psd(fmin=2., fmax=40., average=False, spatial_colors=False)
 
     average = epochs[epoch_compare.label].average()
     name_tmp = generate_name_tmp()
@@ -862,6 +928,8 @@ def plot_activity_brain(db: Session, csv_id: int, epoch_activity: EpochActivity)
     rawdata = load_raw(df, exp)
 
     epochs = get_epoch(rawdata, exp)
+    del df
+    del rawdata
     average = epochs[epoch_activity.label].average()
     name_tmp = generate_name_tmp()
 
@@ -885,4 +953,68 @@ def get_epoch(rawdata, exp):
         event_id[label.description] = int(label.label)
 
     return mne.Epochs(rawdata, events=events, event_id=event_id, tmin=exp.epoch_start, tmax=exp.epoch_end,
-                        preload=True)
+                        preload=True, on_missing='ignore')
+
+
+def plot_psd_topomap(db: Session, csv_id: int):
+    csv = csv_crud.find_by_id(db, csv_id)
+
+    if csv is None:
+        return None
+
+    exp = experiment_crud.find_by_id(db, csv.experiment_id)
+    if exp is None:
+        return None
+
+    df = pd.read_csv(csv.path)
+
+    rawdata = load_raw(df, exp)
+
+    epochs = get_epoch(rawdata, exp)
+    figure = epochs.plot_psd_topomap(ch_type='eeg', normalize=False)
+
+    del df
+    del rawdata
+    name_tmp = generate_name_tmp()
+
+
+    figure.set_size_inches(11.5, 3)
+
+    figure.savefig(name_tmp)
+
+    with open(name_tmp, 'rb') as f:
+        base64image = base64.b64encode(f.read())
+    os.remove(name_tmp)
+    return base64image
+
+
+def plot_psd_chart(db: Session, csv_id: int, psd_chart: EpochPSD):
+    csv = csv_crud.find_by_id(db, csv_id)
+
+    if csv is None:
+        return None
+
+    exp = experiment_crud.find_by_id(db, csv.experiment_id)
+    if exp is None:
+        return None
+
+    df = pd.read_csv(csv.path)
+
+    rawdata = load_raw(df, exp)
+
+    epochs = get_epoch(rawdata, exp)
+    figure = epochs.plot_psd(fmin=psd_chart.f_min, fmax=psd_chart.f_max, average=psd_chart.average, spatial_colors=False)
+
+    del df
+    del rawdata
+    name_tmp = generate_name_tmp()
+
+
+    figure.set_size_inches(11.5, 3)
+
+    figure.savefig(name_tmp)
+
+    with open(name_tmp, 'rb') as f:
+        base64image = base64.b64encode(f.read())
+    os.remove(name_tmp)
+    return base64image

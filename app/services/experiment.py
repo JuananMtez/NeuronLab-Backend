@@ -68,6 +68,11 @@ def delete_experiment(db: Session, experiment_id: int) -> bool:
             os.remove(c.path)
         except FileNotFoundError:
             pass
+    for t in experiment.trainings:
+        try:
+            os.remove(t.path)
+        except FileNotFoundError:
+            pass
 
     experiment_crud.delete(db, experiment)
     return True

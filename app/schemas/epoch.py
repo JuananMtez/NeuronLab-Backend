@@ -14,6 +14,11 @@ class EpochCompare(BaseModel):
     label: str
 
 
+class EpochPSD(BaseModel):
+    f_min: float
+    f_max: float
+    average: bool
+
 class EpochActivity(BaseModel):
     label: str
     times: list[float]

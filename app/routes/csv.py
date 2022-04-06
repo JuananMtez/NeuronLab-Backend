@@ -3,7 +3,7 @@ from ..config.database import get_db
 from starlette.status import HTTP_204_NO_CONTENT, HTTP_404_NOT_FOUND
 from app.schemas.csv import CSVResponse, CSVCopy, CSVFilters
 from app.schemas.preproccessing import PreproccessingResponse, ICAMethod, ICAExclude
-from app.schemas.epoch import EpochPlot, EpochAverage, EpochCompare, EpochActivity
+from app.schemas.epoch import EpochPlot, EpochAverage, EpochCompare, EpochActivity, EpochPSD
 from app.schemas.feature_extraction import FeaturesResponse, FeaturePost
 from app.services import csv as csv_service
 from fastapi.responses import FileResponse
@@ -78,27 +78,12 @@ async def change_name(csv_id: int, csv_copy: CSVCopy, db =Depends(get_db)):
 
 @csv_controller.post("/preproccessing/list")
 async def apply_preproccessing(csv_filters: CSVFilters, db=Depends(get_db)):
-    text = csv_service.apply_preproccessing(db, csv_filters)
-    if text is not None:
-        raise HTTPException(status_code=500, detail=text)
-    return Response(status_code=HTTP_204_NO_CONTENT)
+    return csv_service.apply_preproccessing(db, csv_filters)
 
 
 @csv_controller.post("/feature/list")
 async def apply_feature(feature_post: FeaturePost, db=Depends(get_db)):
-    text = csv_service.apply_feature(db, feature_post)
-    if text is not None:
-        raise HTTPException(status_code=500, detail=text)
-    return Response(status_code=HTTP_204_NO_CONTENT)
-
-
-@csv_controller.post("/feature/list")
-async def apply_feature(feature_post: FeaturePost, db=Depends(get_db)):
-    text = csv_service.apply_feature(db, feature_post)
-    if text is not None:
-        raise HTTPException(status_code=500, detail=text)
-    return Response(status_code=HTTP_204_NO_CONTENT)
-
+    return csv_service.apply_feature(db, feature_post)
 
 
 @csv_controller.post("/{csv_id}/ica/plot/properties")
@@ -169,6 +154,24 @@ async def plot_compare(csv_id: int, epoch_compare: EpochCompare, db=Depends(get_
 @csv_controller.post("/{csv_id}/epoch/activity/plot")
 async def plot_activity_brain(csv_id: int, epoch_activity: EpochActivity, db=Depends(get_db)):
     img = csv_service.plot_activity_brain(db, csv_id, epoch_activity)
+    if img is None:
+        return Response(status_code=HTTP_404_NOT_FOUND)
+
+    return img
+
+
+@csv_controller.get("/{csv_id}/psd/topomap/plot")
+async def plot_psd_topomap(csv_id: int, db=Depends(get_db)):
+    img = csv_service.plot_psd_topomap(db, csv_id)
+    if img is None:
+        return Response(status_code=HTTP_404_NOT_FOUND)
+
+    return img
+
+
+@csv_controller.post("/{csv_id}/psd/plot")
+async def plot_psd(csv_id: int, psd_chart: EpochPSD,db=Depends(get_db)):
+    img = csv_service.plot_psd_chart(db, csv_id, psd_chart)
     if img is None:
         return Response(status_code=HTTP_404_NOT_FOUND)
 

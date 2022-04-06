@@ -292,11 +292,12 @@ class Training(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(255))
-    description = Column(String(500))
-    training_data = Column(String(10))
-    features = Column(String(255))
+    description = Column(String(7500))
+    features = Column(String(50))
     path = Column(String(255), unique=True)
     experiment_id = Column(Integer, ForeignKey('experiment.id'))
+    type = Column(String(50))
+    validation = Column(String(5000))
 
     csvs = relationship(
         "CSV",
