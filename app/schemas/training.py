@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Union
+from typing import Union, Optional
 
 
 
@@ -61,6 +61,8 @@ class TrainingResponse(BaseModel):
     description: str
     type: str
     validation: str
+    accuracy: Optional[str]
+    loss: Optional[str]
 
     class Config:
         orm_mode = True

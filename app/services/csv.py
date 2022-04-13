@@ -89,7 +89,6 @@ def create_csv(db: Session, name: str, subject_id: int, experiment_id: int,
 
     rawdata = load_raw(df, exp)
 
-
     events = mne.find_events(rawdata, shortest_event=1)
     event_id = {}
     for label in exp.labels:
@@ -113,7 +112,6 @@ def create_csv(db: Session, name: str, subject_id: int, experiment_id: int,
                         events=len(events),
                         epochs=str_epoch)
 
-    subject.total_experiments_performed = subject.total_experiments_performed + 1
     subject_crud.save(db, subject)
 
     return csv_crud.save(db, db_csv)
@@ -132,6 +130,12 @@ def delete_csv(db: Session, csv_id: int) -> bool:
     for training in csv.trainings:
         try:
             os.remove(training.path)
+            os.remove(training.accuracy)
+
+            if training.type == 'Deep Learning':
+                os.remove(training.description)
+                os.remove(training.validation)
+                os.remove(training.loss)
         except FileNotFoundError:
             pass
 
@@ -267,70 +271,84 @@ def apply_feature(db: Session, feature_post: FeaturePost):
             break
         if exp is None:
             exp = experiment_crud.find_by_id(db, csv.experiment_id)
-
         try:
 
-            df = pd.read_csv(csv.path)
-            if "Timestamp" in df.columns:
-                del df['Timestamp']
+            if feature_post.feature == 'nothing':
+                new_df = pd.read_csv(csv.path)
 
-            rawdata = load_raw(df, exp)
-            epochs = get_epoch(rawdata, exp)
+                if "Timestamp" in new_df.columns:
+                    del new_df['Timestamp']
 
-
-            if feature_post.feature == 'mean':
-                data_epochs = epochs.get_data()
-                del rawdata
-                del df
-                del epochs
-
-                new_df = apply_mean(exp, data_epochs)
                 db_f = models.FeatureExtraction(
                     csv_id=csv.id,
-                    feature_extraction="Mean")
+                    feature_extraction="Nothing")
                 csv.feature_extractions.append(db_f)
 
-            elif feature_post.feature == 'variance':
-                data_epochs = epochs.get_data()
-                del rawdata
-                del df
-                del epochs
-                new_df = apply_variance(exp, data_epochs)
-                db_f = models.FeatureExtraction(
-                    csv_id=csv.id,
-                    feature_extraction="Variance")
-                csv.feature_extractions.append(db_f)
+            else:
 
-            elif feature_post.feature == 'deviation':
-                data_epochs = epochs.get_data()
-                del rawdata
-                del df
-                del epochs
-                new_df = apply_standard_deviation(exp, data_epochs)
-                db_f = models.FeatureExtraction(
-                    csv_id=csv.id,
-                    feature_extraction="Standard Deviation")
-                csv.feature_extractions.append(db_f)
 
-            else: #Always is PSD
-                del rawdata
-                del df
-                new_df = apply_psd(exp, epochs, feature_post.feature)
-                bands = feature_post.feature.split(',')
-                band_text = ""
-                for band in bands:
-                    band_text += band + ", "
-                band_text = band_text[:-2]
-                db_f = models.FeatureExtraction(
-                    csv_id=csv.id,
-                    feature_extraction="Power Spectral Density (" + band_text + ")")
-                csv.feature_extractions.append(db_f)
+                df = pd.read_csv(csv.path)
+                if "Timestamp" in df.columns:
+                    del df['Timestamp']
+
+                rawdata = load_raw(df, exp)
+                epochs = get_epoch(rawdata, exp)
+
+
+                if feature_post.feature == 'mean':
+                    data_epochs = epochs.get_data()
+                    del rawdata
+                    del df
+                    del epochs
+
+                    new_df = apply_mean(exp, data_epochs)
+                    db_f = models.FeatureExtraction(
+                        csv_id=csv.id,
+                        feature_extraction="Mean")
+                    csv.feature_extractions.append(db_f)
+
+                elif feature_post.feature == 'variance':
+                    data_epochs = epochs.get_data()
+                    del rawdata
+                    del df
+                    del epochs
+                    new_df = apply_variance(exp, data_epochs)
+                    db_f = models.FeatureExtraction(
+                        csv_id=csv.id,
+                        feature_extraction="Variance")
+                    csv.feature_extractions.append(db_f)
+
+                elif feature_post.feature == 'deviation':
+                    data_epochs = epochs.get_data()
+                    del rawdata
+                    del df
+                    del epochs
+                    new_df = apply_standard_deviation(exp, data_epochs)
+                    db_f = models.FeatureExtraction(
+                        csv_id=csv.id,
+                        feature_extraction="Standard Deviation")
+                    csv.feature_extractions.append(db_f)
+
+                else: #Always is PSD
+                    del rawdata
+                    del df
+                    new_df = apply_psd(exp, epochs, feature_post.feature)
+                    bands = feature_post.feature.split(',')
+                    band_text = ""
+                    for band in bands:
+                        band_text += band + ", "
+                    band_text = band_text[:-2]
+                    db_f = models.FeatureExtraction(
+                        csv_id=csv.id,
+                        feature_extraction="Power Spectral Density (" + band_text + ")")
+                    csv.feature_extractions.append(db_f)
 
             name_file = generate_name_csv(db)
-
             os.remove(csv.path)
             csv.path = generate_name_csv(db)
             csv.date = csv.path[12:31]
+            new_df.to_csv(name_file, index=False)
+
             csv.duraction = 0
 
             if csv.type == 'prep':
@@ -338,7 +356,6 @@ def apply_feature(db: Session, feature_post: FeaturePost):
             else:
                 csv.type = 'feature'
 
-            new_df.to_csv(name_file, index=False)
             csv_crud.save(db, csv)
             text += csv.name + ": Extraction applied\n"
 
@@ -722,7 +739,7 @@ def apply_standard_deviation (exp, data_epochs):
     return pd.DataFrame(array, columns=ch_names + ['Stimulus'])
 
 
-def apply_psd (exp, epochs, bands):
+def apply_psd(exp, epochs, bands):
     bands_array = bands.split(',')
 
     psds, freqs = mne.time_frequency.psd_welch(epochs, n_per_seg=256, picks='eeg')
@@ -736,16 +753,19 @@ def apply_psd (exp, epochs, bands):
         for band in bands_array:
             low = 0
             high = 0
-            if band == 'beta':
+            if band == 'gamma':
+                low = 30
+                high = 100
+            elif band == 'beta':
                 low = 12
                 high = 30
-            if band == 'alpha':
+            elif band == 'alpha':
                 low = 8
                 high = 12
-            if band == 'theta':
+            elif band == 'theta':
                 low = 4
                 high = 8
-            if band == 'delta':
+            elif band == 'delta':
                 low = 1
                 high = 4
             idx_band = np.logical_and(freqs >= low, high <= freqs)
@@ -770,7 +790,6 @@ def apply_psd (exp, epochs, bands):
             ch_names.append(ch.channel.name + '_' + band)
 
     return pd.DataFrame(result, columns=ch_names + ['Stimulus'])
-
 
 
 def plot_chart(db: Session, csv_id: int, beginning:int, duraction:int):
@@ -971,6 +990,7 @@ def plot_psd_topomap(db: Session, csv_id: int):
     rawdata = load_raw(df, exp)
 
     epochs = get_epoch(rawdata, exp)
+
     figure = epochs.plot_psd_topomap(ch_type='eeg', normalize=False)
 
     del df
@@ -1003,6 +1023,7 @@ def plot_psd_chart(db: Session, csv_id: int, psd_chart: EpochPSD):
     rawdata = load_raw(df, exp)
 
     epochs = get_epoch(rawdata, exp)
+
     figure = epochs.plot_psd(fmin=psd_chart.f_min, fmax=psd_chart.f_max, average=psd_chart.average, spatial_colors=False)
 
     del df

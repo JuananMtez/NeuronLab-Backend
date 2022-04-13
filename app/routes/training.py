@@ -65,7 +65,7 @@ async def predict(training_id: int, csv_id: int, db: Session = Depends(get_db)):
 
 
 @training_controller.get("/{training_id}/predict/summary")
-async def predict(training_id: int, db: Session = Depends(get_db)):
+async def summary(training_id: int, db: Session = Depends(get_db)):
     obj = training_service.get_summary(db, training_id)
     if obj is None:
         return Response(status_code=HTTP_404_NOT_FOUND)

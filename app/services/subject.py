@@ -19,8 +19,7 @@ def create_subject(db: Session, subject: SubjectPost) -> models.Subject:
     db_subject = models.Subject(name=subject.name,
                                 surname=subject.surname,
                                 age=subject.age,
-                                gender=subject.gender,
-                                total_experiments_performed=0)
+                                gender=subject.gender)
 
     for x in subject.mental_conditions:
         condition = models.MentalCondition(condition=x.condition)

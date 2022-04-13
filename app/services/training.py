@@ -14,12 +14,17 @@ from joblib import dump, load
 import app.crud.experiment as experiment_crud
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import learning_curve
+
 from sklearn.svm import SVC
 import numpy as np
 from sklearn.metrics import classification_report
 from tensorflow.python import keras
 from tensorflow.python.keras import Sequential, optimizers
 from tensorflow.python.keras.layers import Dense
+from matplotlib import pyplot as plt
+import base64
+
 import tensorflow as tf
 
 
@@ -55,14 +60,6 @@ def create_training_machine(db: Session, training_post: MachineLearningPost):
                 pass
 
     df = pd.concat(dfs, ignore_index=True)
-    labels = np.array([df['Stimulus'].tolist()]).T
-
-    del df['Stimulus']
-
-    rawdata = df.values
-
-    del df
-
 
     if training_post.algorithm.__class__.__name__ == 'KNN':
         clf = KNeighborsClassifier(n_neighbors=training_post.algorithm.n_neighbors)
@@ -70,19 +67,39 @@ def create_training_machine(db: Session, training_post: MachineLearningPost):
 
     elif training_post.algorithm.__class__.__name__ == 'RandomForest':
         clf = RandomForestClassifier(n_estimators=training_post.algorithm.n_estimators, max_depth=training_post.algorithm.max_depth, random_state=training_post.algorithm.random_state)
+
         description = "Random Forest (max_depth: " + str(training_post.algorithm.max_depth) + ", n_estimatos: " + str(training_post.algorithm.n_estimators) + ", random_state: " + str(training_post.algorithm.random_state) + ")"
 
     elif training_post.algorithm.__class__.__name__ == 'SVM':
         clf = SVC(kernel=training_post.algorithm.kernel)
+
         description = "SVM (kernel: " + training_post.algorithm.kernel + ")"
 
     description += "\nTraining Data = " + str(training_post.training_data) + "%, Testing Data = " + str(training_post.testing_data) + "%"
-    X_train, X_test, y_train, y_test = train_test_split(rawdata, labels, test_size=training_post.testing_data/100, random_state=0, shuffle=True)
 
+
+    X_train, X_test, y_train, y_test = train_test(df, exp.labels, training_post.testing_data)
+
+    del df
     clf.fit(X=X_train, y=y_train)
+    train_sizes, train_scores, test_scores, fit_times, _ = learning_curve(clf, X_train, y_train, cv=30, return_times=True)
+
+    plt.figure(figsize=(11.5, 5))
+
+    plt.plot(train_sizes, np.mean(train_scores, axis=1), label="train")
+
+    plt.plot(train_sizes, np.mean(test_scores, axis=1), color="g", label="test")
+
+    plt.legend(loc="best")
+    plt.xlabel("Training Set Size")
+    plt.ylabel("Accuracy")
+
+    name_img_accuracy = generate_name_file("imgs", "accuracy")
+    plt.savefig(name_img_accuracy)
+
 
     name_model = generate_name_model('machine')
-
+    db_training.accuracy = name_img_accuracy
     db_training.validation = str(classification_report(y_test, clf.predict(X_test)))
     db_training.path = name_model
     db_training.description = description
@@ -95,7 +112,12 @@ def create_training_machine(db: Session, training_post: MachineLearningPost):
 def delete_training(db: Session, training_id: int):
     training = training_crud.find_by_id(db, training_id)
     os.remove(training.path)
+    os.remove(training.accuracy)
 
+    if training.type == 'Deep Learning':
+        os.remove(training.description)
+        os.remove(training.validation)
+        os.remove(training.loss)
     training_crud.delete(db, training)
 
 
@@ -103,7 +125,24 @@ def find_all_csv(db: Session, csv_id: int) -> Optional[list[models.Training]]:
     csv = csv_crud.find_by_id(db, csv_id)
     if csv is None:
         return None
-    return csv.trainings
+    returned = []
+    for training in csv.trainings:
+        with open(training.accuracy, 'rb') as f:
+            training.accuracy = base64.b64encode(f.read())
+        if training.type == 'Deep Learning':
+            f = open(training.validation, "r")
+            training.validation = f.read()
+
+            f = open(training.description, "r")
+            training.description = f.read()
+
+
+            with open(training.loss, 'rb') as f:
+                training.loss = base64.b64encode(f.read())
+
+        returned.append(training)
+
+    return returned
 
 
 def generate_name_model(type: str):
@@ -140,6 +179,12 @@ def find_all_predictable(db: Session, csv_id: int) -> Optional[list[models.Train
                     found = True
                 i = i + 1
             if not found:
+                if train.type == 'Deep Learning':
+                    f = open(train.validation, "r")
+                    train.validation = f.read()
+
+                    f = open(train.description, "r")
+                    train.description = f.read()
                 trainings.append(train)
 
     return trainings
@@ -155,11 +200,8 @@ def predict(db: Session, training_id: int, csv_id: int):
         return
 
     df = pd.read_csv(csv.path)
-    labels = np.array([df['Stimulus'].tolist()]).T
-    del df['Stimulus']
-
-    rawdata = df.values
-    del df
+    y = df["Stimulus"]
+    x = df.drop(columns=["Stimulus"])
 
     if training.type == 'Machine Learning':
 
@@ -167,7 +209,7 @@ def predict(db: Session, training_id: int, csv_id: int):
         cont = 0
 
         try:
-            text = str(classification_report(labels, clf.predict(rawdata)))
+            text = str(classification_report(y, clf.predict(x)))
         except ValueError as e:
             return str(e)
 
@@ -180,7 +222,7 @@ def predict(db: Session, training_id: int, csv_id: int):
     elif training.type == 'Deep Learning':
         model = keras.models.load_model(training.path)
         try:
-            loss, accuracy = model.evaluate(x=rawdata, y=labels, verbose=0)
+            loss, accuracy = model.evaluate(x=x, y=y, verbose=0)
             text = "Loss: " + str(loss) +"\nAccuracy " + str(accuracy)
             return {"text": text, "n_jumps": 2}
         except tf.errors.InvalidArgumentError as e:
@@ -237,6 +279,11 @@ def create_training_deep(db: Session, training_post: DeepLearningPost):
 
     description += "\nTraining Data = " + str(training_post.training_data) + "%, Testing Data = " + str(training_post.testing_data) + "%"
 
+    name_file_description = generate_name_file("txt", "description")
+    f = open(name_file_description, "a")
+    f.write(description)
+    f.close()
+
     opt = None
     if training_post.type == 'default':
         if training_post.optimizer == 'sgd':
@@ -273,36 +320,62 @@ def create_training_deep(db: Session, training_post: DeepLearningPost):
                 pass
 
     df = pd.concat(dfs, ignore_index=True)
-    df = df.sample(n=int((training_post.training_data * df.shape[0]) / 100))
 
-    labels = np.array([df['Stimulus'].tolist()]).T
-    del df['Stimulus']
-    rawdata = df.values
+    X_train, X_test, y_train, y_test = train_test(df, exp.labels, training_post.testing_data)
+
     del df
+
 
     oldStdout = sys.stdout
     sys.stdout = mystdout = io.StringIO()
-
-
-    X_train, X_test, y_train, y_test = train_test_split(rawdata, labels, test_size=training_post.testing_data/100, random_state=0, shuffle=True)
-
     try:
-        model.fit(x=X_train, y=y_train, epochs=training_post.epochs, verbose=1)
+        history = model.fit(x=X_train, y=y_train, epochs=training_post.epochs, verbose=1)
         sys.stdout = oldStdout
+
+        plt.figure(figsize=(11.5, 5))
+        plt.plot(history.history['accuracy'])
+        plt.ylabel('Accuracy')
+        plt.xlabel('Epoch')
+        plt.legend(['train'], loc='upper left')
+        name_img_accuracy = generate_name_file("imgs", "accuracy")
+        plt.savefig(name_img_accuracy)
+
+        plt.figure(figsize=(11.5, 5))
+        plt.plot(history.history['loss'])
+        plt.ylabel('Loss')
+        plt.xlabel('Epoch')
+        plt.legend(['train'], loc='upper left')
+        name_img_loss = generate_name_file("imgs", "loss")
+        plt.savefig(name_img_loss)
 
         loss, accuracy = model.evaluate(x=X_test, y=y_test, verbose=0)
         text = "Loss: " + str(loss) + ", Accuracy " + str(accuracy)
-        db_training.validation = mystdout.getvalue() + "\n\n" + text
+        name_file_validation = generate_name_file("txt", "validation")
+        f = open(name_file_validation, "a")
+        f.write(mystdout.getvalue().replace("\b","") + "\n\n" + text)
+        f.close()
+
+
 
     except ValueError as e:
         return str(e)
 
     name_model = generate_name_model('deep')
     db_training.path = name_model
-    db_training.description = description
+    db_training.loss = name_img_loss
+    db_training.accuracy = name_img_accuracy
+    db_training.description = name_file_description
+    db_training.validation = name_file_validation
 
-    model.save(name_model)
-    training_crud.save(db, db_training)
+    try:
+        training_crud.save(db, db_training)
+        model.save(name_model)
+    except:
+        os.remove(name_file_description)
+        os.remove(name_file_validation)
+        os.remove(name_img_accuracy)
+        os.remove(name_img_loss)
+        return "Internal Server Error"
 
     return True
 
@@ -334,3 +407,41 @@ def get_model_summary(model):
 def get_all_csvs(db: Session, training_id: int) -> list[models.CSV]:
     training = training_crud.find_by_id(db, training_id)
     return training.csvs
+
+
+def train_test(dataframe, labels, testing):
+
+
+    dfs = []
+    for label in labels:
+        dfs.append(dataframe.loc[dataframe["Stimulus"] == float(label.label)])
+
+    x_trains = []
+    y_trains = []
+    x_tests = []
+    y_tests = []
+    for df in dfs:
+        y = df["Stimulus"]
+        x = df.drop(columns=["Stimulus"])
+
+        X_train, X_test, y_train, y_test = train_test_split(x, y, test_size=testing/100, random_state=42, shuffle=False)
+        x_trains.append(X_train)
+        x_tests.append(X_test)
+        y_trains.append(y_train)
+        y_tests.append(y_test)
+
+    X_train = pd.concat(x_trains, axis=0, ignore_index=True)
+    y_train = pd.concat(y_trains, axis=0, ignore_index=True)
+    X_test = pd.concat(x_tests, axis=0, ignore_index=True)
+    y_test = pd.concat(y_tests, axis=0, ignore_index=True)
+
+
+
+    return X_train, X_test, y_train, y_test
+
+
+def generate_name_file(file: str, str: str):
+    now = datetime.now()
+    if file == "imgs":
+        return "imgs/" + str + "_{}.png".format(now.strftime("%d-%m-%Y-%H-%M-%S"))
+    return "trainings_info/" + str + "_{}.txt".format(now.strftime("%d-%m-%Y-%H-%M-%S"))

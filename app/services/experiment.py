@@ -70,7 +70,14 @@ def delete_experiment(db: Session, experiment_id: int) -> bool:
             pass
     for t in experiment.trainings:
         try:
+
             os.remove(t.path)
+            os.remove(t.accuracy)
+
+            if t.type == 'Deep Learning':
+                os.remove(t.description)
+                os.remove(t.validation)
+                os.remove(t.loss)
         except FileNotFoundError:
             pass
 
