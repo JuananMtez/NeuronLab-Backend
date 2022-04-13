@@ -82,24 +82,23 @@ def create_training_machine(db: Session, training_post: MachineLearningPost):
 
     del df
     clf.fit(X=X_train, y=y_train)
-    train_sizes, train_scores, test_scores, fit_times, _ = learning_curve(clf, X_train, y_train, cv=30, return_times=True)
+    '''
+    train_sizes, train_scores = learning_curve(clf, X_train, y_train, cv=2, return_times=True)
 
     plt.figure(figsize=(11.5, 5))
 
-    plt.plot(train_sizes, np.mean(train_scores, axis=1), label="train")
+    plt.plot(train_sizes, np.mean(train_scores, axis=1))
 
-    plt.plot(train_sizes, np.mean(test_scores, axis=1), color="g", label="test")
 
-    plt.legend(loc="best")
     plt.xlabel("Training Set Size")
     plt.ylabel("Accuracy")
 
     name_img_accuracy = generate_name_file("imgs", "accuracy")
     plt.savefig(name_img_accuracy)
-
-
-    name_model = generate_name_model('machine')
     db_training.accuracy = name_img_accuracy
+
+    '''
+    name_model = generate_name_model('machine')
     db_training.validation = str(classification_report(y_test, clf.predict(X_test)))
     db_training.path = name_model
     db_training.description = description
@@ -111,13 +110,29 @@ def create_training_machine(db: Session, training_post: MachineLearningPost):
 
 def delete_training(db: Session, training_id: int):
     training = training_crud.find_by_id(db, training_id)
-    os.remove(training.path)
-    os.remove(training.accuracy)
+    try:
+        os.remove(training.path)
+    except:
+        pass
+    try:
+        os.remove(training.accuracy)
+    except:
+        pass
 
     if training.type == 'Deep Learning':
-        os.remove(training.description)
-        os.remove(training.validation)
-        os.remove(training.loss)
+        try:
+            os.remove(training.description)
+        except:
+            pass
+        try:
+            os.remove(training.validation)
+        except:
+            pass
+        try:
+            os.remove(training.loss)
+        except:
+            pass
+
     training_crud.delete(db, training)
 
 
@@ -127,8 +142,11 @@ def find_all_csv(db: Session, csv_id: int) -> Optional[list[models.Training]]:
         return None
     returned = []
     for training in csv.trainings:
-        with open(training.accuracy, 'rb') as f:
-            training.accuracy = base64.b64encode(f.read())
+        try:
+            with open(training.accuracy, 'rb') as f:
+                training.accuracy = base64.b64encode(f.read())
+        except:
+            pass
         if training.type == 'Deep Learning':
             f = open(training.validation, "r")
             training.validation = f.read()
@@ -336,7 +354,7 @@ def create_training_deep(db: Session, training_post: DeepLearningPost):
         plt.plot(history.history['accuracy'])
         plt.ylabel('Accuracy')
         plt.xlabel('Epoch')
-        plt.legend(['train'], loc='upper left')
+
         name_img_accuracy = generate_name_file("imgs", "accuracy")
         plt.savefig(name_img_accuracy)
 
@@ -344,7 +362,6 @@ def create_training_deep(db: Session, training_post: DeepLearningPost):
         plt.plot(history.history['loss'])
         plt.ylabel('Loss')
         plt.xlabel('Epoch')
-        plt.legend(['train'], loc='upper left')
         name_img_loss = generate_name_file("imgs", "loss")
         plt.savefig(name_img_loss)
 

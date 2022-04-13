@@ -130,14 +130,26 @@ def delete_csv(db: Session, csv_id: int) -> bool:
     for training in csv.trainings:
         try:
             os.remove(training.path)
-            os.remove(training.accuracy)
-
-            if training.type == 'Deep Learning':
-                os.remove(training.description)
-                os.remove(training.validation)
-                os.remove(training.loss)
-        except FileNotFoundError:
+        except:
             pass
+        try:
+            os.remove(training.accuracy)
+        except:
+            pass
+
+        if training.type == 'Deep Learning':
+            try:
+                os.remove(training.description)
+            except:
+                pass
+            try:
+                os.remove(training.validation)
+            except:
+                pass
+            try:
+                os.remove(training.loss)
+            except:
+                pass
 
         if len(training.csvs) == 1:
             training_crud.delete(db, training)

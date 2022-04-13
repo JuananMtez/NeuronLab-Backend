@@ -66,20 +66,31 @@ def delete_experiment(db: Session, experiment_id: int) -> bool:
     for c in experiment.csvs:
         try:
             os.remove(c.path)
-        except FileNotFoundError:
+        except:
             pass
     for t in experiment.trainings:
         try:
-
             os.remove(t.path)
-            os.remove(t.accuracy)
-
-            if t.type == 'Deep Learning':
-                os.remove(t.description)
-                os.remove(t.validation)
-                os.remove(t.loss)
-        except FileNotFoundError:
+        except:
             pass
+        try:
+            os.remove(t.accuracy)
+        except:
+            pass
+
+        if t.type == 'Deep Learning':
+            try:
+                os.remove(t.description)
+            except:
+                pass
+            try:
+                os.remove(t.validation)
+            except:
+                pass
+            try:
+                os.remove(t.loss)
+            except:
+                pass
 
     experiment_crud.delete(db, experiment)
     return True
