@@ -85,6 +85,14 @@ async def apply_preproccessing(csv_filters: CSVFilters, db=Depends(get_db)):
 async def apply_feature(feature_post: FeaturePost, db=Depends(get_db)):
     return csv_service.apply_feature(db, feature_post)
 
+@csv_controller.post("/{csv_id}/ica/plot/components")
+async def plot_components_ica(csv_id: int, ica_method: ICAMethod, db=Depends(get_db)):
+    object = csv_service.plot_components_ica(db, csv_id, ica_method)
+    if object is None:
+        return Response(status_code=HTTP_404_NOT_FOUND)
+
+    return object
+
 
 @csv_controller.post("/{csv_id}/ica/plot/properties")
 async def plot_properties_ica(csv_id: int, ica_method: ICAMethod, db=Depends(get_db)):

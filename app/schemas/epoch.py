@@ -7,11 +7,11 @@ class EpochPlot(BaseModel):
 
 class EpochAverage(BaseModel):
     channel: str
-    label: str
+    stimulus: str
 
 
 class EpochCompare(BaseModel):
-    label: str
+    stimulus: str
 
 
 class EpochPSD(BaseModel):
@@ -20,6 +20,6 @@ class EpochPSD(BaseModel):
     average: bool
 
 class EpochActivity(BaseModel):
-    label: str
+    stimulus: str
     times: list[float]
     extrapolate: str

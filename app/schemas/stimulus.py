@@ -1,13 +1,13 @@
 from pydantic import BaseModel
 
 
-class LabelPost(BaseModel):
-    label: str
+class StimulusPost(BaseModel):
+    name: str
     description: str
 
 
-class LabelResponse(BaseModel):
-    label: str
+class StimulusResponse(BaseModel):
+    name: str
     description: str
 
     class Config:

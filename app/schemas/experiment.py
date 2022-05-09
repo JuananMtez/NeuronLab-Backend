@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 from app.schemas.researcher import ResearcherResponse
-from app.schemas.label import LabelPost, LabelResponse
+from app.schemas.stimulus import StimulusPost, StimulusResponse
 from app.schemas.device import EEGHeadsetResponse, DeviceResponse, EEGHeadsetPost
 from app.schemas.subject import SubjectResponse
 from app.schemas.csv import CSVResponse
@@ -15,7 +15,7 @@ class ExperimentPost(BaseModel):
     name: str
     description: str
     researcher_creator_id: int
-    labels: list[LabelPost]
+    stimuli: list[StimulusPost]
     device: device_post
     subjects: list[int]
     epoch_start: float
@@ -48,7 +48,7 @@ class ExperimentResponse(BaseModel):
     description: str
     researcher_creator_id: int
     researchers: list[ResearcherResponse] = []
-    labels: list[LabelResponse] = []
+    stimuli: list[StimulusResponse] = []
     device: device_response
     subjects: list[SubjectResponse] = []
     csvs: list[CSVResponse] = []

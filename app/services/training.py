@@ -78,26 +78,11 @@ def create_training_machine(db: Session, training_post: MachineLearningPost):
     description += "\nTraining Data = " + str(training_post.training_data) + "%, Testing Data = " + str(training_post.testing_data) + "%"
 
 
-    X_train, X_test, y_train, y_test = train_test(df, exp.labels, training_post.testing_data)
+    X_train, X_test, y_train, y_test = train_test(df, exp.stimuli, training_post.testing_data)
 
     del df
     clf.fit(X=X_train, y=y_train)
-    '''
-    train_sizes, train_scores = learning_curve(clf, X_train, y_train, cv=2, return_times=True)
 
-    plt.figure(figsize=(11.5, 5))
-
-    plt.plot(train_sizes, np.mean(train_scores, axis=1))
-
-
-    plt.xlabel("Training Set Size")
-    plt.ylabel("Accuracy")
-
-    name_img_accuracy = generate_name_file("imgs", "accuracy")
-    plt.savefig(name_img_accuracy)
-    db_training.accuracy = name_img_accuracy
-
-    '''
     name_model = generate_name_model('machine')
     db_training.validation = str(classification_report(y_test, clf.predict(X_test)))
     db_training.path = name_model
@@ -121,14 +106,6 @@ def delete_training(db: Session, training_id: int):
 
     if training.type == 'Deep Learning':
         try:
-            os.remove(training.description)
-        except:
-            pass
-        try:
-            os.remove(training.validation)
-        except:
-            pass
-        try:
             os.remove(training.loss)
         except:
             pass
@@ -143,20 +120,16 @@ def find_all_csv(db: Session, csv_id: int) -> Optional[list[models.Training]]:
     returned = []
     for training in csv.trainings:
         try:
-            with open(training.accuracy, 'rb') as f:
-                training.accuracy = base64.b64encode(f.read())
+            with open(training.path_accuracy, 'rb') as f:
+                training.path_accuracy = base64.b64encode(f.read())
         except:
             pass
-        if training.type == 'Deep Learning':
-            f = open(training.validation, "r")
-            training.validation = f.read()
 
-            f = open(training.description, "r")
-            training.description = f.read()
-
-
-            with open(training.loss, 'rb') as f:
-                training.loss = base64.b64encode(f.read())
+        try:
+            with open(training.path_loss, 'rb') as f:
+                training.path_loss = base64.b64encode(f.read())
+        except:
+            pass
 
         returned.append(training)
 
@@ -197,12 +170,7 @@ def find_all_predictable(db: Session, csv_id: int) -> Optional[list[models.Train
                     found = True
                 i = i + 1
             if not found:
-                if train.type == 'Deep Learning':
-                    f = open(train.validation, "r")
-                    train.validation = f.read()
 
-                    f = open(train.description, "r")
-                    train.description = f.read()
                 trainings.append(train)
 
     return trainings
@@ -297,11 +265,12 @@ def create_training_deep(db: Session, training_post: DeepLearningPost):
 
     description += "\nTraining Data = " + str(training_post.training_data) + "%, Testing Data = " + str(training_post.testing_data) + "%"
 
+    '''
     name_file_description = generate_name_file("txt", "description")
     f = open(name_file_description, "a")
     f.write(description)
     f.close()
-
+    '''
     opt = None
     if training_post.type == 'default':
         if training_post.optimizer == 'sgd':
@@ -339,7 +308,7 @@ def create_training_deep(db: Session, training_post: DeepLearningPost):
 
     df = pd.concat(dfs, ignore_index=True)
 
-    X_train, X_test, y_train, y_test = train_test(df, exp.labels, training_post.testing_data)
+    X_train, X_test, y_train, y_test = train_test(df, exp.stimuli, training_post.testing_data)
 
     del df
 
@@ -379,17 +348,18 @@ def create_training_deep(db: Session, training_post: DeepLearningPost):
 
     name_model = generate_name_model('deep')
     db_training.path = name_model
-    db_training.loss = name_img_loss
-    db_training.accuracy = name_img_accuracy
-    db_training.description = name_file_description
-    db_training.validation = name_file_validation
+    db_training.path_loss = name_img_loss
+    db_training.path_accuracy = name_img_accuracy
+    db_training.description = description
+
+    db_training.validation = text
 
     try:
         training_crud.save(db, db_training)
         model.save(name_model)
     except:
-        os.remove(name_file_description)
-        os.remove(name_file_validation)
+        #os.remove(name_file_description)
+        #os.remove(name_file_validation)
         os.remove(name_img_accuracy)
         os.remove(name_img_loss)
         return "Internal Server Error"
@@ -426,12 +396,12 @@ def get_all_csvs(db: Session, training_id: int) -> list[models.CSV]:
     return training.csvs
 
 
-def train_test(dataframe, labels, testing):
+def train_test(dataframe, stimuli, testing):
 
 
     dfs = []
-    for label in labels:
-        dfs.append(dataframe.loc[dataframe["Stimulus"] == float(label.label)])
+    for stimulus in stimuli:
+        dfs.append(dataframe.loc[dataframe["Stimulus"] == float(stimulus.name)])
 
     x_trains = []
     y_trains = []

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, Float, Enum, Table, Boolean
+from sqlalchemy import Column, Integer, String, ForeignKey, Float, Enum, Table, Boolean, Text
 from sqlalchemy.orm import relationship
 from app.config.database import Base
 import enum
@@ -137,10 +137,7 @@ class Experiment(Base):
     epoch_start = Column(Float)
     epoch_end = Column(Float)
 
-
-
-
-    labels = relationship("Label", cascade="save-update, delete")
+    stimuli = relationship("Stimulus", cascade="save-update, delete")
 
     device = relationship("Device", back_populates="experiment", uselist=False, cascade="save-update, delete")
 
@@ -159,11 +156,11 @@ class Experiment(Base):
     trainings = relationship("Training", cascade="save-update, delete")
 
 
-class Label(Base):
-    __tablename__ = 'label'
+class Stimulus(Base):
+    __tablename__ = 'stimulus'
 
     id = Column(Integer, primary_key=True, index=True)
-    label = Column(String(255))
+    name = Column(String(255))
     description = Column(String(255))
     experiment_id = Column(Integer, ForeignKey('experiment.id'))
 
@@ -288,14 +285,14 @@ class Training(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(255))
-    description = Column(String(255), unique=True)
+    description = Column(Text())
     features = Column(String(50))
     path = Column(String(255), unique=True)
     experiment_id = Column(Integer, ForeignKey('experiment.id'))
     type = Column(String(50))
-    validation = Column(String(2000), unique=True)
-    accuracy = Column(String(255), unique=True, nullable=True)
-    loss = Column(String(255), unique=True, nullable=True)
+    validation = Column(Text())
+    path_accuracy = Column(String(255), nullable=True)
+    path_loss = Column(String(255), unique=True, nullable=True)
 
 
 

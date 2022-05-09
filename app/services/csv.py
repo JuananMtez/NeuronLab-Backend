@@ -76,10 +76,10 @@ def create_csv(db: Session, name: str, subject_id: int, experiment_id: int,
 
         for stimulus in object["stimuli"]:
             cont = 0
-            for label in exp.labels:
-                if stimulus[0][0] != int(label.label):
+            for stim in exp.stimuli:
+                if stimulus[0][0] != int(stim.name):
                     cont += 1
-            if cont == len(exp.labels):
+            if cont == len(exp.stimuli):
                 return None
 
     name_file = generate_name_csv(db)
@@ -91,11 +91,10 @@ def create_csv(db: Session, name: str, subject_id: int, experiment_id: int,
 
     events = mne.find_events(rawdata, shortest_event=1)
     event_id = {}
-    for label in exp.labels:
-        event_id[label.description] = int(label.label)
+    for stimulus in exp.stimuli:
+        event_id[stimulus.description] = int(stimulus.name)
 
-    epochs = mne.Epochs(rawdata, events=events, event_id=event_id, tmin=exp.epoch_start, tmax=exp.epoch_end)
-
+    epochs = mne.Epochs(rawdata, events=events, event_id=event_id, tmin=exp.epoch_start, tmax=exp.epoch_end, on_missing='ignore')
 
     str_epoch_list = str(epochs).split(',')
     str_epoch = str_epoch_list[len(str_epoch_list)-1].replace('\n', '').replace('\'', '')
@@ -138,14 +137,6 @@ def delete_csv(db: Session, csv_id: int) -> bool:
             pass
 
         if training.type == 'Deep Learning':
-            try:
-                os.remove(training.description)
-            except:
-                pass
-            try:
-                os.remove(training.validation)
-            except:
-                pass
             try:
                 os.remove(training.loss)
             except:
@@ -886,14 +877,15 @@ def plot_average_epoch(db: Session, csv_id: int, epoch_average: EpochAverage):
     df = pd.read_csv(csv.path)
 
     rawdata = load_raw(df, exp)
+
     epochs = get_epoch(rawdata, exp)
 
     del df
     del rawdata
 
-    average = epochs[epoch_average.label].average()
+    average = epochs[epoch_average.stimulus].average()
     name_tmp = generate_name_tmp()
-    figure = average.plot(picks=epoch_average.channel, titles=dict(eeg='Channel ' + epoch_average.channel + ', Label: ' + epoch_average.label))
+    figure = average.plot(picks=epoch_average.channel, titles=dict(eeg='Channel ' + epoch_average.channel + ', Stimulus: ' + epoch_average.stimulus))
     figure.set_size_inches(11.5, 5)
 
     figure.savefig(name_tmp)
@@ -927,12 +919,12 @@ def plot_compare(db: Session, csv_id: int, epoch_compare: EpochCompare):
 
     epochs.plot_psd(fmin=2., fmax=40., average=False, spatial_colors=False)
 
-    average = epochs[epoch_compare.label].average()
+    average = epochs[epoch_compare.stimulus].average()
     name_tmp = generate_name_tmp()
 
     figure, ax = plt.subplots()
 
-    mne.viz.plot_compare_evokeds(dict(target=average), axes=ax, title='Label: ' + epoch_compare.label,
+    mne.viz.plot_compare_evokeds(dict(target=average), axes=ax, title='Stimulus: ' + epoch_compare.stimulus,
                                 show_sensors='upper right')
     figure.set_size_inches(11.5, 5)
 
@@ -961,7 +953,7 @@ def plot_activity_brain(db: Session, csv_id: int, epoch_activity: EpochActivity)
     epochs = get_epoch(rawdata, exp)
     del df
     del rawdata
-    average = epochs[epoch_activity.label].average()
+    average = epochs[epoch_activity.stimulus].average()
     name_tmp = generate_name_tmp()
 
     figure = average.plot_topomap(times=epoch_activity.times, ch_type='eeg', extrapolate=epoch_activity.extrapolate)
@@ -980,8 +972,8 @@ def get_epoch(rawdata, exp):
 
     events = mne.find_events(rawdata, shortest_event=1)
     event_id = {}
-    for label in exp.labels:
-        event_id[label.description] = int(label.label)
+    for stimulus in exp.stimuli:
+        event_id[stimulus.description] = int(stimulus.name)
 
     return mne.Epochs(rawdata, events=events, event_id=event_id, tmin=exp.epoch_start, tmax=exp.epoch_end,
                         preload=True, on_missing='ignore')

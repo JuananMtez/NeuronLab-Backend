@@ -5,7 +5,7 @@ from app.crud import experiment as experiment_crud, researcher as researcher_cru
 from app.models.models import Experiment
 from app.schemas.experiment import ExperimentPost, ExperimentResearchers, ExperimentSubjects
 from app.models import models
-from app.schemas.label import LabelPost
+from app.schemas.stimulus import StimulusPost
 from app.crud import subject as subject_crud
 import os
 
@@ -22,9 +22,8 @@ def get_all_experiments(db: Session) -> list[models.Experiment]:
 
 def create_experiment(db: Session, experiment: ExperimentPost) -> Optional[Experiment]:
     researcher = researcher_crud.find_by_id(db, experiment.researcher_creator_id)
-    if researcher is None or is_label_duplicated(experiment.labels) or not valid_device(experiment.device.type):
+    if researcher is None or is_stimulus_duplicated(experiment.stimuli) or not valid_device(experiment.device.type):
         return None
-
 
     db_experiment = models.Experiment(name=experiment.name,
                                       description=experiment.description,
@@ -32,8 +31,8 @@ def create_experiment(db: Session, experiment: ExperimentPost) -> Optional[Exper
                                       epoch_start=experiment.epoch_start,
                                       epoch_end=experiment.epoch_end)
 
-    for x in experiment.labels:
-        db_experiment.labels.append(models.Label(label=x.label,
+    for x in experiment.stimuli:
+        db_experiment.stimuli.append(models.Stimulus(name=x.name,
                                                  description=x.description))
 
     db_experiment.researchers.append(researcher)
@@ -79,14 +78,6 @@ def delete_experiment(db: Session, experiment_id: int) -> bool:
             pass
 
         if t.type == 'Deep Learning':
-            try:
-                os.remove(t.description)
-            except:
-                pass
-            try:
-                os.remove(t.validation)
-            except:
-                pass
             try:
                 os.remove(t.loss)
             except:
@@ -167,11 +158,11 @@ def get_all_experiments_researcher(db: Session, researcher_id: int) -> Optional[
     return researcher.experiments
 
 
-def is_label_duplicated(labels: list[LabelPost]) -> bool:
-    for x in labels:
+def is_stimulus_duplicated(stimuli: list[StimulusPost]) -> bool:
+    for x in stimuli:
         count = 0
-        for y in labels:
-            if x.label == y.label:
+        for y in stimuli:
+            if x.name == y.name:
                 count = count + 1
         if count > 1:
             return True

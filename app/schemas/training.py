@@ -61,8 +61,8 @@ class TrainingResponse(BaseModel):
     description: str
     type: str
     validation: str
-    accuracy: Optional[str]
-    loss: Optional[str]
+    path_accuracy: Optional[str]
+    path_loss: Optional[str]
 
     class Config:
         orm_mode = True
