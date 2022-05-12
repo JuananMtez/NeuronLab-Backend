@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from app.schemas.training import MachineLearningPost, TrainingResponse, DeepLearningPost
 from app.services import training as training_service
 from app.schemas.csv import CSVResponse
+import time
 
 training_controller = APIRouter(
     prefix="/training",
@@ -17,11 +18,13 @@ async def create_training_machine(training_post: MachineLearningPost, db: Sessio
 
     if type(returned) == str:
         raise HTTPException(status_code=500, detail=returned)
+
     return Response(status_code=HTTP_204_NO_CONTENT)
 
 
 @training_controller.post("/deep")
 async def create_training_deep(training_post: DeepLearningPost, db: Session = Depends(get_db)):
+
     returned = training_service.create_training_deep(db, training_post)
 
     if type(returned) == str:

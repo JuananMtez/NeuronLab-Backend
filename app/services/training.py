@@ -48,12 +48,8 @@ def create_training_machine(db: Session, training_post: MachineLearningPost):
                 df = pd.read_csv(c.path)
                 dfs.append(df)
                 db_training.csvs.append(c)
-                if db_training.features is None:
-                    text = ""
-                    for x in c.feature_extractions:
-                        text = text + str(x.feature_extraction) + ", "
-                    text = text[:-2]
-                    db_training.features = text
+                if db_training.feature is None:
+                    db_training.feature = c.feature.feature
 
 
             except FileNotFoundError:
@@ -155,14 +151,10 @@ def find_all_predictable(db: Session, csv_id: int) -> Optional[list[models.Train
     if exp is None:
         return None
 
-    text = ""
-    for feature in csv.feature_extractions:
-        text = text + str(feature.feature_extraction) + ", "
-    text = text[:-2]
 
     trainings = []
     for train in exp.trainings:
-        if train.features == text:
+        if train.feature == csv.feature.feature:
             found = False
             i = 0
             while i < len(train.csvs) and not found:
@@ -170,7 +162,6 @@ def find_all_predictable(db: Session, csv_id: int) -> Optional[list[models.Train
                     found = True
                 i = i + 1
             if not found:
-
                 trainings.append(train)
 
     return trainings
@@ -265,12 +256,6 @@ def create_training_deep(db: Session, training_post: DeepLearningPost):
 
     description += "\nTraining Data = " + str(training_post.training_data) + "%, Testing Data = " + str(training_post.testing_data) + "%"
 
-    '''
-    name_file_description = generate_name_file("txt", "description")
-    f = open(name_file_description, "a")
-    f.write(description)
-    f.close()
-    '''
     opt = None
     if training_post.type == 'default':
         if training_post.optimizer == 'sgd':
@@ -295,12 +280,9 @@ def create_training_deep(db: Session, training_post: DeepLearningPost):
                 df = pd.read_csv(c.path)
                 dfs.append(df)
                 db_training.csvs.append(c)
-                if db_training.features is None:
-                    text = ""
-                    for x in c.feature_extractions:
-                        text = text + str(x.feature_extraction) + ", "
-                    text = text[:-2]
-                    db_training.features = text
+                if db_training.feature is None:
+
+                    db_training.feature = c.feature.feature
 
 
             except FileNotFoundError:
@@ -336,11 +318,6 @@ def create_training_deep(db: Session, training_post: DeepLearningPost):
 
         loss, accuracy = model.evaluate(x=X_test, y=y_test, verbose=0)
         text = "Loss: " + str(loss) + ", Accuracy " + str(accuracy)
-        name_file_validation = generate_name_file("txt", "validation")
-        f = open(name_file_validation, "a")
-        f.write(mystdout.getvalue().replace("\b","") + "\n\n" + text)
-        f.close()
-
 
 
     except ValueError as e:
@@ -358,8 +335,7 @@ def create_training_deep(db: Session, training_post: DeepLearningPost):
         training_crud.save(db, db_training)
         model.save(name_model)
     except:
-        #os.remove(name_file_description)
-        #os.remove(name_file_validation)
+
         os.remove(name_img_accuracy)
         os.remove(name_img_loss)
         return "Internal Server Error"
@@ -398,16 +374,13 @@ def get_all_csvs(db: Session, training_id: int) -> list[models.CSV]:
 
 def train_test(dataframe, stimuli, testing):
 
-
-    dfs = []
+    dfs_one_stimulus = []
     for stimulus in stimuli:
-        dfs.append(dataframe.loc[dataframe["Stimulus"] == float(stimulus.name)])
+        dfs_one_stimulus.append(dataframe.loc[dataframe["Stimulus"] == float(stimulus.name)])
 
-    x_trains = []
-    y_trains = []
-    x_tests = []
-    y_tests = []
-    for df in dfs:
+    x_trains = [], y_trains = [], x_tests = [], y_tests = []
+
+    for df in dfs_one_stimulus:
         y = df["Stimulus"]
         x = df.drop(columns=["Stimulus"])
 
@@ -421,8 +394,6 @@ def train_test(dataframe, stimuli, testing):
     y_train = pd.concat(y_trains, axis=0, ignore_index=True)
     X_test = pd.concat(x_tests, axis=0, ignore_index=True)
     y_test = pd.concat(y_tests, axis=0, ignore_index=True)
-
-
 
     return X_train, X_test, y_train, y_test
 

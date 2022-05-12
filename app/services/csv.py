@@ -39,13 +39,13 @@ def get_all_csv_preproccessing(db: Session, csv_id: int) -> Optional[list[models
     return csv.preproccessing_list
 
 
-def get_all_csv_features(db: Session, csv_id: int) -> Optional[list[models.FeatureExtraction]]:
+def get_csv_feature(db: Session, csv_id: int) -> Optional[models.FeatureExtraction]:
     csv = csv_crud.find_by_id(db, csv_id)
 
     if csv is None:
         return None
 
-    return csv.feature_extractions
+    return csv.feature
 
 
 def get_all_csv_experiment(db: Session, experiment_id: int) -> Optional[list[models.Experiment]]:
@@ -199,14 +199,11 @@ def apply_preproccessing(db: Session, csv_filters: CSVFilters):
         csv = csv_crud.find_by_id(db, csv_id)
         if csv is not None:
             try:
-
                 if exp is None:
                     exp = experiment_crud.find_by_id(db, csv.experiment_id)
-
                 df = pd.read_csv(csv.path)
                 rawdata = load_raw(df, exp)
                 del df
-
                 if rawdata is not None:
                     for prep in csv_filters.preproccessings:
                         if prep.__class__.__name__ == 'CSVBandpass':
@@ -226,7 +223,6 @@ def apply_preproccessing(db: Session, csv_filters: CSVFilters):
                     ch_names = []
                     for x in exp.device.channels:
                         ch_names.append(x.channel.name)
-
                     data = convert_to_df(rawdata, ch_names)
 
                     data.to_csv(csv.path, index=False)
@@ -245,8 +241,8 @@ def apply_preproccessing(db: Session, csv_filters: CSVFilters):
 def load_raw(df, experiment):
 
     if experiment.device.type == 'eeg_headset':
-        if "Timestamp" in df.columns:
-            del df['Timestamp']
+        #if "Timestamp" in df.columns:
+        #    del df['Timestamp']
         ch_names = list(df.columns)[0:experiment.device.channels_count] + ['Stim']
         ch_types = ['eeg'] * experiment.device.channels_count + ['stim']
 
@@ -279,20 +275,19 @@ def apply_feature(db: Session, feature_post: FeaturePost):
             if feature_post.feature == 'nothing':
                 new_df = pd.read_csv(csv.path)
 
-                if "Timestamp" in new_df.columns:
-                    del new_df['Timestamp']
+               # if "Timestamp" in new_df.columns:
+                #    del new_df['Timestamp']
 
                 db_f = models.FeatureExtraction(
                     csv_id=csv.id,
-                    feature_extraction="Nothing")
-                csv.feature_extractions.append(db_f)
+                    feature="Nothing")
+                csv.feature = db_f
 
             else:
 
-
                 df = pd.read_csv(csv.path)
-                if "Timestamp" in df.columns:
-                    del df['Timestamp']
+              #  if "Timestamp" in df.columns:
+              #      del df['Timestamp']
 
                 rawdata = load_raw(df, exp)
                 epochs = get_epoch(rawdata, exp)
@@ -307,8 +302,8 @@ def apply_feature(db: Session, feature_post: FeaturePost):
                     new_df = apply_mean(exp, data_epochs)
                     db_f = models.FeatureExtraction(
                         csv_id=csv.id,
-                        feature_extraction="Mean")
-                    csv.feature_extractions.append(db_f)
+                        feature="Mean")
+                    csv.feature= db_f
 
                 elif feature_post.feature == 'variance':
                     data_epochs = epochs.get_data()
@@ -318,8 +313,8 @@ def apply_feature(db: Session, feature_post: FeaturePost):
                     new_df = apply_variance(exp, data_epochs)
                     db_f = models.FeatureExtraction(
                         csv_id=csv.id,
-                        feature_extraction="Variance")
-                    csv.feature_extractions.append(db_f)
+                        feature="Variance")
+                    csv.feature = db_f
 
                 elif feature_post.feature == 'deviation':
                     data_epochs = epochs.get_data()
@@ -329,8 +324,8 @@ def apply_feature(db: Session, feature_post: FeaturePost):
                     new_df = apply_standard_deviation(exp, data_epochs)
                     db_f = models.FeatureExtraction(
                         csv_id=csv.id,
-                        feature_extraction="Standard Deviation")
-                    csv.feature_extractions.append(db_f)
+                        feature="Standard Deviation")
+                    csv.feature = db_f
 
                 else: #Always is PSD
                     del rawdata
@@ -343,8 +338,8 @@ def apply_feature(db: Session, feature_post: FeaturePost):
                     band_text = band_text[:-2]
                     db_f = models.FeatureExtraction(
                         csv_id=csv.id,
-                        feature_extraction="Power Spectral Density (" + band_text + ")")
-                    csv.feature_extractions.append(db_f)
+                        feature="Power Spectral Density (" + band_text + ")")
+                    csv.feature = db_f
 
             name_file = generate_name_csv(db)
             os.remove(csv.path)
@@ -382,7 +377,8 @@ def generate_name_tmp():
     return "tmp/record_{}.png".format(now.strftime("%d-%m-%Y-%H-%M-%S"))
 
 
-def create_csv_eegheadset(obj: Any, exp: models.Experiment, name_file: str, time_correction: float):
+def create_csv_eegheadset(obj: Any, exp: models.Experiment,
+                          name_file: str, time_correction: float):
     ch_names = []
     for x in exp.device.channels:
         ch_names.append(x.channel.name)
@@ -392,8 +388,8 @@ def create_csv_eegheadset(obj: Any, exp: models.Experiment, name_file: str, time
         obj["dataInput"] = obj["dataInput"][:, :8]
 
     obj["timestamp"] = np.array(obj["timestamp"]) + time_correction
-    obj["dataInput"] = np.c_[obj["timestamp"], obj["dataInput"]]
-    data = pd.DataFrame(data=obj["dataInput"], columns=['Timestamp'] + ch_names)
+    #obj["dataInput"] = np.c_[obj["timestamp"], obj["dataInput"]]
+    data = pd.DataFrame(data=obj["dataInput"], columns= ch_names)
 
     if len(obj["stimuli"]) != 0:
         data.loc[:, 'Stimulus'] = 0
@@ -628,27 +624,15 @@ def components_exclude_ica(db: Session, csv_id: int, arg: ICAExclude):
     csv_crud.save(db, csv)
 
 
-def get_csvs_same_features(db: Session, csv_id:int)-> Optional[list[models.CSV]]:
+def get_csvs_same_features(db: Session, csv_id: int)-> Optional[list[models.CSV]]:
     csv = csv_crud.find_by_id(db, csv_id)
     if csv is None:
         return None
-
-    all_csv = csv_crud.find_all(db)
+    all_csv = csv_crud.find_all_by_experiment(db, csv.experiment_id)
     returned = []
 
     for c in all_csv:
-        same = True
-        if len(c.feature_extractions) == len(csv.feature_extractions) and c.id != csv.id:
-            i = 0
-            while i < len(c.feature_extractions) and same == True:
-                if c.feature_extractions[i].feature_extraction == csv.feature_extractions[i].feature_extraction:
-                    i = i + 1
-                else:
-                    same = False
-        else:
-            same = False
-
-        if same == True:
+        if c.id != csv.id and c.feature is not None and c.feature.feature == csv.feature.feature:
             returned.append(c)
 
     return returned
@@ -808,7 +792,7 @@ def plot_chart(db: Session, csv_id: int, beginning:int, duraction:int):
 
     values = file.iloc[int(beginning * exp.device.sample_rate): int((beginning * exp.device.sample_rate) + (duraction * exp.device.sample_rate))].transpose().values.tolist()
     del file
-    if len(csv.preproccessing_list) == 0 and len(csv.feature_extractions) == 0:
+    if len(csv.preproccessing_list) == 0 and csv.feature is None:
         del values[0]
 
     returned = []
@@ -912,12 +896,9 @@ def plot_compare(db: Session, csv_id: int, epoch_compare: EpochCompare):
     rawdata = load_raw(df, exp)
 
     epochs = get_epoch(rawdata, exp)
-    epochs.plot_psd_topomap(ch_type='eeg', normalize=False)
 
     del df
     del rawdata
-
-    epochs.plot_psd(fmin=2., fmax=40., average=False, spatial_colors=False)
 
     average = epochs[epoch_compare.stimulus].average()
     name_tmp = generate_name_tmp()

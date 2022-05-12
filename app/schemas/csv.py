@@ -30,8 +30,6 @@ class CSVDownsampling(BaseModel):
 
 
 proccessing = Union[CSVBandpass, CSVNotch, CSVDownsampling]
-
-
 class CSVFilters(BaseModel):
     csvs: list[int]
     preproccessings: list[proccessing]

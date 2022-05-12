@@ -254,7 +254,11 @@ class CSV(Base):
     experiment_id = Column(Integer, ForeignKey('experiment.id'))
 
     preproccessing_list = relationship("Preproccessing", cascade="save-update, delete")
-    feature_extractions = relationship("FeatureExtraction", cascade="save-update, delete")
+    #feature_extractions = relationship("FeatureExtraction", cascade="save-update, delete")
+    feature = relationship("FeatureExtraction", back_populates="csv", uselist=False, cascade="save-update, delete")
+
+
+
 
     trainings = relationship(
         "Training",
@@ -276,8 +280,10 @@ class FeatureExtraction(Base):
     __tablename__ = 'feature_extraction'
 
     id = Column(Integer, primary_key=True, index=True)
-    feature_extraction = Column(String(255))
-    csv_id = Column(Integer, ForeignKey('csv.id'))
+    feature = Column(String(255))
+    #csv_id = Column(Integer, ForeignKey('csv.id'))
+    csv_id = Column(Integer, ForeignKey('csv.id'), nullable=True)
+    csv = relationship("CSV", back_populates="feature")
 
 
 class Training(Base):
@@ -286,7 +292,7 @@ class Training(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(255))
     description = Column(Text())
-    features = Column(String(50))
+    feature = Column(String(50))
     path = Column(String(255), unique=True)
     experiment_id = Column(Integer, ForeignKey('experiment.id'))
     type = Column(String(50))

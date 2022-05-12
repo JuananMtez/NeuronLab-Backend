@@ -33,20 +33,19 @@ async def get_all_preproccessing(csv_id: int, db = Depends(get_db)):
     return preproccessings
 
 
-@csv_controller.get("/{csv_id}/features", response_model=list[FeaturesResponse])
-async def get_all_features(csv_id: int, db = Depends(get_db)):
-    features = csv_service.get_all_csv_features(db, csv_id)
-    if features is None:
-        return Response(status_code=HTTP_404_NOT_FOUND)
-    return features
+@csv_controller.get("/{csv_id}/feature", response_model=FeaturesResponse)
+async def get_feature(csv_id: int, db = Depends(get_db)):
+    return csv_service.get_csv_feature(db, csv_id)
+
+
 
 
 @csv_controller.post("/", response_model=CSVResponse)
 async def create_csv(name: str, subject_id: int, experiment_id: int, time_correction: float, files: list[UploadFile], db = Depends(get_db)):
-
     c = csv_service.create_csv(db, name, subject_id, experiment_id, time_correction, files)
     if c is None:
         return Response(status_code=HTTP_404_NOT_FOUND)
+
     return c
 
 
@@ -78,12 +77,18 @@ async def change_name(csv_id: int, csv_copy: CSVCopy, db =Depends(get_db)):
 
 @csv_controller.post("/preproccessing/list")
 async def apply_preproccessing(csv_filters: CSVFilters, db=Depends(get_db)):
-    return csv_service.apply_preproccessing(db, csv_filters)
+
+    text = csv_service.apply_preproccessing(db, csv_filters)
+
+    return text
 
 
 @csv_controller.post("/feature/list")
 async def apply_feature(feature_post: FeaturePost, db=Depends(get_db)):
-    return csv_service.apply_feature(db, feature_post)
+
+    text = csv_service.apply_feature(db, feature_post)
+
+    return text
 
 @csv_controller.post("/{csv_id}/ica/plot/components")
 async def plot_components_ica(csv_id: int, ica_method: ICAMethod, db=Depends(get_db)):
@@ -117,8 +122,8 @@ async def download_csv(csv_id: int, db=Depends(get_db)):
     return FileResponse(csv.path, filename=csv.name+".csv")
 
 
-@csv_controller.get("/{csv_id}/same_features", response_model=list[CSVResponse])
-async def download_csv(csv_id: int, db=Depends(get_db)):
+@csv_controller.get("/{csv_id}/same_feature", response_model=list[CSVResponse])
+async def same_feature(csv_id: int, db=Depends(get_db)):
     csvs = csv_service.get_csvs_same_features(db, csv_id)
     if csvs is None:
         return Response(status_code=HTTP_404_NOT_FOUND)

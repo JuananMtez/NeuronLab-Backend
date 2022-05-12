@@ -8,7 +8,7 @@ class FeaturePost(BaseModel):
 
 class FeaturesResponse(BaseModel):
     id: int
-    feature_extraction: str
+    feature: str
 
 
     class Config:
