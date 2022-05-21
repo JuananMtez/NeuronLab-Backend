@@ -378,7 +378,10 @@ def train_test(dataframe, stimuli, testing):
     for stimulus in stimuli:
         dfs_one_stimulus.append(dataframe.loc[dataframe["Stimulus"] == float(stimulus.name)])
 
-    x_trains = [], y_trains = [], x_tests = [], y_tests = []
+    x_trains = []
+    y_trains = []
+    x_tests = []
+    y_tests = []
 
     for df in dfs_one_stimulus:
         y = df["Stimulus"]
