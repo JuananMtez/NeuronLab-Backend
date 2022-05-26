@@ -1,12 +1,12 @@
 from typing import Optional
 
 from sqlalchemy.orm import Session
-from app.crud import experiment as experiment_crud, researcher as researcher_crud
+from app.repositories import experiment as experiment_crud, researcher as researcher_crud
 from app.models.models import Experiment
 from app.schemas.experiment import ExperimentPost, ExperimentResearchers, ExperimentSubjects
 from app.models import models
 from app.schemas.stimulus import StimulusPost
-from app.crud import subject as subject_crud
+from app.repositories import subject as subject_crud
 import os
 
 

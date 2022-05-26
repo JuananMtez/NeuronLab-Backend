@@ -5,13 +5,13 @@ import pandas as pd
 from sqlalchemy.orm import Session
 import io
 import os
-import app.crud.csv as csv_crud
-import app.crud.training as training_crud
+import app.repositories.csv as csv_crud
+import app.repositories.training as training_crud
 from app.models import models
 from app.schemas.training import MachineLearningPost, DeepLearningPost
 from datetime import datetime
 from joblib import dump, load
-import app.crud.experiment as experiment_crud
+import app.repositories.experiment as experiment_crud
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import learning_curve
@@ -301,7 +301,8 @@ def create_training_deep(db: Session, training_post: DeepLearningPost):
         history = model.fit(x=X_train, y=y_train, epochs=training_post.epochs, verbose=1)
         sys.stdout = oldStdout
 
-        plt.figure(figsize=(11.5, 5))
+
+        plt.figure(figsize=(11.5, 8))
         plt.plot(history.history['accuracy'])
         plt.ylabel('Accuracy')
         plt.xlabel('Epoch')
@@ -309,14 +310,14 @@ def create_training_deep(db: Session, training_post: DeepLearningPost):
         name_img_accuracy = generate_name_file("imgs", "accuracy")
         plt.savefig(name_img_accuracy)
 
-        plt.figure(figsize=(11.5, 5))
+        plt.figure(figsize=(11.5, 8))
         plt.plot(history.history['loss'])
         plt.ylabel('Loss')
         plt.xlabel('Epoch')
         name_img_loss = generate_name_file("imgs", "loss")
         plt.savefig(name_img_loss)
 
-        loss, accuracy = model.evaluate(x=X_test, y=y_test, verbose=0)
+        loss, accuracy = model2.evaluate(x=X_test, y=y_test, verbose=0)
         text = "Loss: " + str(loss) + ", Accuracy " + str(accuracy)
 
 
@@ -329,7 +330,7 @@ def create_training_deep(db: Session, training_post: DeepLearningPost):
     db_training.path_accuracy = name_img_accuracy
     db_training.description = description
 
-    db_training.validation = text
+    db_training.validation = text + "\n" + mystdout.getvalue()
 
     try:
         training_crud.save(db, db_training)
@@ -375,6 +376,7 @@ def get_all_csvs(db: Session, training_id: int) -> list[models.CSV]:
 def train_test(dataframe, stimuli, testing):
 
     dfs_one_stimulus = []
+
     for stimulus in stimuli:
         dfs_one_stimulus.append(dataframe.loc[dataframe["Stimulus"] == float(stimulus.name)])
 
@@ -383,13 +385,11 @@ def train_test(dataframe, stimuli, testing):
     for df in dfs_one_stimulus:
         y = df["Stimulus"]
         x = df.drop(columns=["Stimulus"])
-
-        X_train, X_test, y_train, y_test = train_test_split(x, y, test_size=testing/100, random_state=42, shuffle=False)
+        X_train, X_test, y_train, y_test = train_test_split(x,y,test_size=testing/100,random_state=42,shuffle=False)
         x_trains.append(X_train)
         x_tests.append(X_test)
         y_trains.append(y_train)
         y_tests.append(y_test)
-
     X_train = pd.concat(x_trains, axis=0, ignore_index=True)
     y_train = pd.concat(y_trains, axis=0, ignore_index=True)
     X_test = pd.concat(x_tests, axis=0, ignore_index=True)

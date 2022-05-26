@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 from typing import Optional
 from app.models import models
-from app.crud import researcher as researcher_crud
+from app.repositories import researcher as researcher_crud
 
 
 def find_by_id(db: Session, experiment_id: int) -> Optional[models.Experiment]:

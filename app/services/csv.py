@@ -3,9 +3,9 @@ from typing import Optional, Any
 from fastapi import UploadFile
 from sqlalchemy.orm import Session
 from app.models import models
-from app.crud import csv as csv_crud
-from app.crud import experiment as experiment_crud
-from app.crud import subject as subject_crud
+from app.repositories import csv as csv_crud
+from app.repositories import experiment as experiment_crud
+from app.repositories import subject as subject_crud
 from datetime import datetime, timedelta
 import os
 from app.schemas.csv import CSVCopy, CSVFilters
@@ -17,7 +17,7 @@ import pandas as pd
 from mne.io import RawArray
 import mne
 import base64
-import app.crud.training as training_crud
+import app.repositories.training as training_crud
 from app.schemas.epoch import EpochPlot, EpochAverage, EpochCompare, EpochActivity, EpochPSD
 import matplotlib.pyplot as plt
 import math
@@ -241,8 +241,7 @@ def apply_preproccessing(db: Session, csv_filters: CSVFilters):
 def load_raw(df, experiment):
 
     if experiment.device.type == 'eeg_headset':
-        #if "Timestamp" in df.columns:
-        #    del df['Timestamp']
+
         ch_names = list(df.columns)[0:experiment.device.channels_count] + ['Stim']
         ch_types = ['eeg'] * experiment.device.channels_count + ['stim']
 
@@ -275,8 +274,6 @@ def apply_feature(db: Session, feature_post: FeaturePost):
             if feature_post.feature == 'nothing':
                 new_df = pd.read_csv(csv.path)
 
-               # if "Timestamp" in new_df.columns:
-                #    del new_df['Timestamp']
 
                 db_f = models.FeatureExtraction(
                     csv_id=csv.id,
@@ -286,8 +283,6 @@ def apply_feature(db: Session, feature_post: FeaturePost):
             else:
 
                 df = pd.read_csv(csv.path)
-              #  if "Timestamp" in df.columns:
-              #      del df['Timestamp']
 
                 rawdata = load_raw(df, exp)
                 epochs = get_epoch(rawdata, exp)
@@ -388,7 +383,6 @@ def create_csv_eegheadset(obj: Any, exp: models.Experiment,
         obj["dataInput"] = obj["dataInput"][:, :8]
 
     obj["timestamp"] = np.array(obj["timestamp"]) + time_correction
-    #obj["dataInput"] = np.c_[obj["timestamp"], obj["dataInput"]]
     data = pd.DataFrame(data=obj["dataInput"], columns= ch_names)
 
     if len(obj["stimuli"]) != 0:

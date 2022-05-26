@@ -1,9 +1,9 @@
 from sqlalchemy.orm import Session
 from app.schemas.subject import SubjectResponse, SubjectPost
 from app.models import models
-from app.crud import subject as subject_crud
+from app.repositories import subject as subject_crud
 from typing import Optional
-from app.crud import experiment as experiment_crud
+from app.repositories import experiment as experiment_crud
 
 
 def get_all_subjects(db:Session) -> list[SubjectResponse]:

@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Session
-from app.crud import researcher as researcher_crud
+from app.repositories import researcher as researcher_crud
 from app.models import models
 from app.schemas.researcher import ResearcherPost, ResearcherPutPassword, ResearcherLogin
 from typing import Optional
