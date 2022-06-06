@@ -14,8 +14,10 @@ from joblib import dump, load
 import app.repositories.experiment as experiment_crud
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import learning_curve
 
 from sklearn.svm import SVC
+import numpy as np
 from sklearn.metrics import classification_report
 from tensorflow.python import keras
 from tensorflow.python.keras import Sequential, optimizers
@@ -291,6 +293,7 @@ def create_training_deep(db: Session, training_post: DeepLearningPost):
     X_train, X_test, y_train, y_test = train_test(df, exp.stimuli, training_post.testing_data)
 
     del df
+
 
     oldStdout = sys.stdout
     sys.stdout = mystdout = io.StringIO()

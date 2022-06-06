@@ -131,14 +131,15 @@ def delete_csv(db: Session, csv_id: int) -> bool:
             os.remove(training.path)
         except:
             pass
-        try:
-            os.remove(training.accuracy)
-        except:
-            pass
+
 
         if training.type == 'Deep Learning':
             try:
-                os.remove(training.loss)
+                os.remove(training.path_accuracy)
+            except:
+                pass
+            try:
+                os.remove(training.path_loss)
             except:
                 pass
 
@@ -786,7 +787,8 @@ def plot_chart(db: Session, csv_id: int, beginning:int, duraction:int):
 
     values = file.iloc[int(beginning * exp.device.sample_rate): int((beginning * exp.device.sample_rate) + (duraction * exp.device.sample_rate))].transpose().values.tolist()
     del file
-
+    if len(csv.preproccessing_list) == 0 and csv.feature is None:
+        del values[0]
 
     returned = []
 
