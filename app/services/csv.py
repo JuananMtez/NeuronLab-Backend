@@ -463,7 +463,7 @@ def apply_notch(prep, rawdata, new_csv):
 
         db_preproccessing = models.Preproccessing(
             position=len(new_csv.preproccessing_list) + 1,
-            preproccessing='Bandpass',
+            preproccessing='Notch',
             csv_id=new_csv.id,
             description='Method: IIR, ' + prep.order + ordinal + '-order Butterworth filter, ' + 'Frequency: ' + prep.freq + 'Hz')
         new_csv.preproccessing_list.append(db_preproccessing)
@@ -786,8 +786,7 @@ def plot_chart(db: Session, csv_id: int, beginning:int, duraction:int):
 
     values = file.iloc[int(beginning * exp.device.sample_rate): int((beginning * exp.device.sample_rate) + (duraction * exp.device.sample_rate))].transpose().values.tolist()
     del file
-    if len(csv.preproccessing_list) == 0 and csv.feature is None:
-        del values[0]
+
 
     returned = []
 

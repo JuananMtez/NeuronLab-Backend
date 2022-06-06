@@ -294,7 +294,6 @@ def create_training_deep(db: Session, training_post: DeepLearningPost):
 
     del df
 
-
     oldStdout = sys.stdout
     sys.stdout = mystdout = io.StringIO()
     try:
@@ -317,7 +316,7 @@ def create_training_deep(db: Session, training_post: DeepLearningPost):
         name_img_loss = generate_name_file("imgs", "loss")
         plt.savefig(name_img_loss)
 
-        loss, accuracy = model2.evaluate(x=X_test, y=y_test, verbose=0)
+        loss, accuracy = model.evaluate(x=X_test, y=y_test, verbose=0)
         text = "Loss: " + str(loss) + ", Accuracy " + str(accuracy)
 
 

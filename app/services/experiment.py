@@ -72,14 +72,14 @@ def delete_experiment(db: Session, experiment_id: int) -> bool:
             os.remove(t.path)
         except:
             pass
-        try:
-            os.remove(t.accuracy)
-        except:
-            pass
 
         if t.type == 'Deep Learning':
             try:
-                os.remove(t.loss)
+                os.remove(t.path_loss)
+            except:
+                pass
+            try:
+                os.remove(t.path_accuracy)
             except:
                 pass
 
