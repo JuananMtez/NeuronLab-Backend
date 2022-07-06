@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from app.controllers import researcher, experiment, subject, csv, training
-from .config.database import Base, engine
+from .config.database import engine
 from .models import models
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -8,6 +8,8 @@ from fastapi.middleware.cors import CORSMiddleware
 models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=['*'],
@@ -15,9 +17,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
 app.include_router(researcher.researcher_controller)
 app.include_router(experiment.experiment_controller)
 app.include_router(subject.subject_controller)
 app.include_router(csv.csv_controller)
 app.include_router(training.training_controller)
+
 

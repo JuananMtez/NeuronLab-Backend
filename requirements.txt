@@ -12,3 +12,4 @@ scikit-learn~=1.0.2
 scipy~=1.8.0
 tensorflow~=2.9.1
 cryptography~=37.0.2
+PyMySQL~=1.0.2
