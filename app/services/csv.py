@@ -107,7 +107,7 @@ def create_csv(db: Session, name: str, subject_id: int, experiment_id: int,
                         experiment_id=experiment_id,
                         path=name_file,
                         date=name_file[12:31],
-                        duraction=df.shape[0]/exp.device.sample_rate,
+                        duraction=int(df.shape[0]/exp.device.sample_rate),
                         events=len(events),
                         epochs=str_epoch)
 

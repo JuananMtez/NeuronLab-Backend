@@ -62,9 +62,9 @@ def create_training_machine(db: Session, training_post: MachineLearningPost):
         description = "KNN (n_neighbors: " + str(training_post.algorithm.n_neighbors) + ")"
 
     elif training_post.algorithm.__class__.__name__ == 'RandomForest':
-        clf = RandomForestClassifier(n_estimators=training_post.algorithm.n_estimators, max_depth=training_post.algorithm.max_depth, random_state=training_post.algorithm.random_state)
+        clf = RandomForestClassifier(n_estimators=training_post.algorithm.n_estimators)
 
-        description = "Random Forest (max_depth: " + str(training_post.algorithm.max_depth) + ", n_estimatos: " + str(training_post.algorithm.n_estimators) + ", random_state: " + str(training_post.algorithm.random_state) + ")"
+        description = "Random Forest (n_estimatos: " + str(training_post.algorithm.n_estimators) + ")"
 
     elif training_post.algorithm.__class__.__name__ == 'SVM':
         clf = SVC(kernel=training_post.algorithm.kernel)

@@ -9,9 +9,8 @@ class KNN(BaseModel):
 
 
 class RandomForest(BaseModel):
-    max_depth: int
     n_estimators: int
-    random_state: int
+
 
 
 class SVM(BaseModel):
