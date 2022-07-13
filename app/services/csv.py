@@ -23,7 +23,14 @@ import matplotlib.pyplot as plt
 import math
 import shutil
 from scipy.integrate import simps
+from cryptography.fernet import Fernet
+import os
+import configparser
 
+thisfolder = os.path.dirname(os.path.abspath(__file__))
+initfile = os.path.join(thisfolder, '../config/properties.ini')
+config = configparser.ConfigParser()
+config.read(initfile)
 
 def get_csv_by_id(db: Session, csv_id: int) -> Optional[models.CSV]:
     csv = csv_crud.find_by_id(db, csv_id)
@@ -50,6 +57,10 @@ def get_csv_feature(db: Session, csv_id: int) -> Optional[models.FeatureExtracti
 
 def get_all_csv_experiment(db: Session, experiment_id: int) -> Optional[list[models.Experiment]]:
     e = experiment_crud.find_by_id(db, experiment_id)
+    fernet = Fernet(str.encode(config.get("SECURITY", "key")))
+
+    for csv in e.csvs:
+        csv.subject_name = fernet.decrypt(str.encode(csv.subject_name)).decode()
     if e is None:
         return None
     return e.csvs
@@ -101,8 +112,11 @@ def create_csv(db: Session, name: str, subject_id: int, experiment_id: int,
     str_epoch = str_epoch[1:]
     str_epoch = str_epoch[:-1]
 
+    fernet = Fernet(str.encode(config.get("SECURITY", "key")))
+    subject_encrypted = fernet.encrypt(str(subject.name + ' ' + subject.surname).encode())
+
     db_csv = models.CSV(name=name,
-                        subject_name=subject.name + ' ' + subject.surname,
+                        subject_name=subject_encrypted.decode("utf-8"),
                         type='original',
                         experiment_id=experiment_id,
                         path=name_file,
@@ -151,6 +165,7 @@ def delete_csv(db: Session, csv_id: int) -> bool:
 
 
 def csv_copy(db: Session, csv_id: int, csv_copy: CSVCopy) -> Optional[models.CSV]:
+
     csv_original = csv_crud.find_by_id(db, csv_id)
 
     if csv_original is None:

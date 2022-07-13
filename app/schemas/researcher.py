@@ -14,6 +14,12 @@ class ResearcherLogin(BaseModel):
     password: str
 
 
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+
+
+
 class ResearcherPutPassword(BaseModel):
     password: str
 
@@ -27,3 +33,8 @@ class ResearcherResponse(BaseModel):
 
     class Config:
         orm_mode = True
+
+
+class ResearcherResponseToken(BaseModel):
+    token: Token
+    user: ResearcherResponse

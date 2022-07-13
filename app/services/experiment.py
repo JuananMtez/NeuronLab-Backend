@@ -8,10 +8,22 @@ from app.models import models
 from app.schemas.stimulus import StimulusPost
 from app.repositories import subject as subject_crud
 import os
+import configparser
+from cryptography.fernet import Fernet
 
+thisfolder = os.path.dirname(os.path.abspath(__file__))
+initfile = os.path.join(thisfolder, '../config/properties.ini')
+config = configparser.ConfigParser()
+config.read(initfile)
 
 def get_experiment_by_id(db: Session, experiment_id: int) -> models.Experiment:
     e = experiment_crud.find_by_id(db, experiment_id)
+
+    fernet = Fernet(str.encode(config.get("SECURITY", "key")))
+
+    for csv in e.csvs:
+        csv.subject_name = fernet.decrypt(str.encode(csv.subject_name)).decode()
+
     return experiment_crud.find_by_id(db, experiment_id)
 
 

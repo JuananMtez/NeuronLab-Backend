@@ -5,6 +5,8 @@ from app.models import models
 def find_by_id(db: Session, researcher_id: int) -> models.Researcher:
     return db.query(models.Researcher).filter(models.Researcher.id == researcher_id).first()
 
+def find_by_id_user(db: Session, id: str, user: str) -> models.Researcher:
+    return db.query(models.Researcher).filter(models.Researcher.id == id, models.Researcher.user == user).first()
 
 def save(db: Session, researcher: models.Researcher) -> models.Researcher:
 

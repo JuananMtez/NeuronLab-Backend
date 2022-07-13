@@ -9,6 +9,8 @@ import bcrypt
 def get_researcher_id(db: Session, researcher_id: int) -> models.Researcher:
     return researcher_crud.find_by_id(db, researcher_id)
 
+def get_researcher_id_name(db: Session, researcher_id, researcher_user):
+    return researcher_crud.find_by_id_user(db, researcher_id, researcher_user)
 
 def get_all_researcher(db: Session):
     return researcher_crud.find_all(db)
@@ -47,15 +49,15 @@ def get_all_researcher_not_experiment(db: Session, experiment_id: int) -> list[m
     return returned
 
 
-def login(db: Session, researcher: ResearcherLogin) -> Optional[models.Researcher]:
-    r = researcher_crud.find_by_user(db, researcher.user)
+def login(db: Session, username: str, password: str):
+    researcher = researcher_crud.find_by_user(db, username)
 
-    if r is None:
+    if researcher is None:
         return None
 
-    if bcrypt.checkpw(researcher.password.encode('utf-8'), bytes(r.password, 'utf-8')) \
-            and r.user == researcher.user:
-        return r
+    if bcrypt.checkpw(password.encode('utf-8'), bytes(researcher.password, 'utf-8')) and researcher.user == username:
+        return researcher
+
     return None
 
 
