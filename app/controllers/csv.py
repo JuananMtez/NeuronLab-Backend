@@ -115,7 +115,7 @@ async def exclude_components(csv_id: int, arg: ICAExclude, db=Depends(get_db), e
     return Response(status_code=HTTP_204_NO_CONTENT)
 
 @csv_controller.get("/{csv_id}/download")
-async def download_csv(csv_id: int, db=Depends(get_db), exists_current_researcher = Depends(get_current_researcher)):
+async def download_csv(csv_id: int, db=Depends(get_db)):
     csv = csv_service.get_csv_by_id(db, csv_id)
     if csv is None:
         return Response(status_code=HTTP_404_NOT_FOUND)
