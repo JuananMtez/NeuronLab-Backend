@@ -18,11 +18,13 @@ config.read(initfile)
 
 def get_experiment_by_id(db: Session, experiment_id: int) -> models.Experiment:
     e = experiment_crud.find_by_id(db, experiment_id)
-
+    '''
+        for csv in e.csvs:
+        csv.subject_name = fernet.decrypt(str.encode(csv.subject_name)).decode()
+    '''
     fernet = Fernet(str.encode(config.get("SECURITY", "key")))
 
-    for csv in e.csvs:
-        csv.subject_name = fernet.decrypt(str.encode(csv.subject_name)).decode()
+
 
     return experiment_crud.find_by_id(db, experiment_id)
 
