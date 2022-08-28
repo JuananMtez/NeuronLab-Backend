@@ -60,10 +60,13 @@ def get_csv_feature(db: Session, csv_id: int) -> Optional[models.FeatureExtracti
 
 def get_all_csv_experiment(db: Session, experiment_id: int) -> Optional[list[models.Experiment]]:
     e = experiment_crud.find_by_id(db, experiment_id)
+    '''
     fernet = Fernet(str.encode(config.get("SECURITY", "key")))
 
     for csv in e.csvs:
         csv.subject_name = fernet.decrypt(str.encode(csv.subject_name)).decode()
+    '''
+
     if e is None:
         return None
     return e.csvs
@@ -114,12 +117,14 @@ def create_csv(db: Session, name: str, subject_id: int, experiment_id: int,
     str_epoch = str_epoch_list[len(str_epoch_list)-1].replace('\n', '').replace('\'', '')
     str_epoch = str_epoch[1:]
     str_epoch = str_epoch[:-1]
-
+    '''
     fernet = Fernet(str.encode(config.get("SECURITY", "key")))
     subject_encrypted = fernet.encrypt(str(subject.name + ' ' + subject.surname).encode())
+    '''
+
 
     db_csv = models.CSV(name=name,
-                        subject_name=subject_encrypted.decode("utf-8"),
+                        subject_name=str(subject.name + ' ' + subject.surname),
                         type='original',
                         experiment_id=experiment_id,
                         path=name_file,
@@ -376,15 +381,12 @@ def apply_feature(db: Session, feature_post: FeaturePost):
 
 
 def generate_name_csv(db: Session):
-    '''
+
     now = datetime.now()
     name_file = "csvs/record_{}.csv".format(now.strftime("%d-%m-%Y-%H-%M-%S"))
     while csv_crud.find_by_path(db, name_file):
         now = datetime.now() + timedelta(seconds=1)
         name_file = "csvs/record_{}.csv".format(now.strftime("%d-%m-%Y-%H-%M-%S"))
-
-    '''
-    name_file = "csvs/record_" + str(random.randint(0,10000)) + ".csv"
 
     return name_file
 
