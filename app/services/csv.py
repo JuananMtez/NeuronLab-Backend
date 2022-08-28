@@ -6,6 +6,7 @@ from app.models import models
 from app.repositories import csv as csv_crud
 from app.repositories import experiment as experiment_crud
 from app.repositories import subject as subject_crud
+import random
 from datetime import datetime, timedelta
 import os
 from app.schemas.csv import CSVCopy, CSVFilters
@@ -26,11 +27,13 @@ from scipy.integrate import simps
 from cryptography.fernet import Fernet
 import os
 import configparser
+import random
 
 thisfolder = os.path.dirname(os.path.abspath(__file__))
 initfile = os.path.join(thisfolder, '../config/properties.ini')
 config = configparser.ConfigParser()
 config.read(initfile)
+
 
 def get_csv_by_id(db: Session, csv_id: int) -> Optional[models.CSV]:
     csv = csv_crud.find_by_id(db, csv_id)
@@ -374,11 +377,15 @@ def apply_feature(db: Session, feature_post: FeaturePost):
 
 
 def generate_name_csv(db: Session):
+    '''
     now = datetime.now()
     name_file = "csvs/record_{}.csv".format(now.strftime("%d-%m-%Y-%H-%M-%S"))
     while csv_crud.find_by_path(db, name_file):
         now = datetime.now() + timedelta(seconds=1)
         name_file = "csvs/record_{}.csv".format(now.strftime("%d-%m-%Y-%H-%M-%S"))
+
+    '''
+    name_file = "csvs/record_" + str(random.randint(0,10000)) + ".csv"
 
     return name_file
 
@@ -802,8 +809,8 @@ def plot_chart(db: Session, csv_id: int, beginning:int, duraction:int):
 
     values = file.iloc[int(beginning * exp.device.sample_rate): int((beginning * exp.device.sample_rate) + (duraction * exp.device.sample_rate))].transpose().values.tolist()
     del file
-    if len(csv.preproccessing_list) == 0 and csv.feature is None:
-        del values[0]
+
+
 
     returned = []
 
