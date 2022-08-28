@@ -355,11 +355,10 @@ def apply_feature(db: Session, feature_post: FeaturePost):
                         feature="Power Spectral Density (" + band_text + ")")
                     csv.feature = db_f
 
-            name_file = generate_name_csv(db)
             os.remove(csv.path)
             csv.path = generate_name_csv(db)
             csv.date = csv.path[12:31]
-            new_df.to_csv(name_file, index=False)
+            new_df.to_csv(csv.path, index=False)
 
             csv.duraction = 0
 
