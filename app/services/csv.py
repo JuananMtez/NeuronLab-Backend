@@ -72,7 +72,7 @@ def get_all_csv_experiment(db: Session, experiment_id: int) -> Optional[list[mod
     return e.csvs
 
 
-def create_csv(db: Session, name: str, subject_id: int, experiment_id: int,
+def create_csv(db: Session, name: str, subject_id: int, subject_name: str, experiment_id: int,
                time_correction: float, files: list[UploadFile]) -> Optional[models.CSV]:
     exp = experiment_crud.find_by_id(db, experiment_id)
     subject = subject_crud.find_by_id(db, subject_id)
@@ -124,7 +124,7 @@ def create_csv(db: Session, name: str, subject_id: int, experiment_id: int,
 
 
     db_csv = models.CSV(name=name,
-                        subject_name=str(subject.name + ' ' + subject.surname),
+                        subject_name=subject_name,
                         type='original',
                         experiment_id=experiment_id,
                         path=name_file,

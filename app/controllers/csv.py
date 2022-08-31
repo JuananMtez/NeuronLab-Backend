@@ -41,8 +41,8 @@ async def get_feature(csv_id: int, db = Depends(get_db), exists_current_research
 
 
 @csv_controller.post("/", response_model=CSVResponse)
-async def create_csv(name: str, subject_id: int, experiment_id: int, time_correction: float, files: list[UploadFile], db = Depends(get_db), exists_current_researcher = Depends(get_current_researcher)):
-    c = csv_service.create_csv(db, name, subject_id, experiment_id, time_correction, files)
+async def create_csv(name: str, subject_id: int, subject_name_cypher: str, experiment_id: int, time_correction: float, files: list[UploadFile], db = Depends(get_db), exists_current_researcher = Depends(get_current_researcher)):
+    c = csv_service.create_csv(db, name, subject_id, subject_name_cypher, experiment_id, time_correction, files)
     if c is None:
         return Response(status_code=HTTP_404_NOT_FOUND)
 
