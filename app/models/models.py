@@ -290,7 +290,7 @@ class Training(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(255))
     description = Column(Text())
-    feature = Column(String(50))
+    feature = Column(Text())
     path = Column(String(255), unique=True)
     experiment_id = Column(Integer, ForeignKey('experiment.id'))
     type = Column(String(50))
