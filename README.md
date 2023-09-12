@@ -1,6 +1,8 @@
 <!-- PROJECT LOGO -->
 <div align="center">
-
+<a href="https://github.com/JuananMtez/NeuronLab-Backend">
+    <img src="https://raw.githubusercontent.com/JuananMtez/NeuronLab-GUI/main/src/img/neuronlab_logo2.png" alt="BCI" width="300px" height="300px">
+  </a>
   <h3 align="center">NeuronLab Framework (Backend)</h3>
   <p align="center">
     Brain Computer Interface (BCI) Framework for the study of biosignals.
@@ -9,7 +11,10 @@
 
 
 ## About the project
-
+<a href="https://um.es">
+  <img src="https://sceps.es/wp-content/uploads/2017/08/Logo-UMU.jpg" alt="BCI" width="195" height="50">
+</a>
+<br/>
 
 NeuronLab is a secure, multiplatform, and web-based framework that provides a working environment to researchers where every phase of the BCI lifecycle (acquisition, preprocessing, features extraction, and classification) can be performed. Additionally, it defines sophisticated tools to study the EEG signals.
 
