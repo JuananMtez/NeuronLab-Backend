@@ -21,14 +21,7 @@ async def create_researcher(researcher: ResearcherPost, db: Session = Depends(ge
         raise HTTPException(status_code=409, detail="Email or user already registered")
     return r
 
-'''
-@researcher_controller.post("/login", response_model=ResearcherResponse)
-async def login(researcher: ResearcherLogin, db: Session = Depends(get_db)):
-    r = researcher_service.login(db, researcher)
-    if r is None:
-        raise HTTPException(status_code=404, detail="User not found")
-    return r
-'''
+
 
 @researcher_controller.get("/", response_model=list[ResearcherResponse])
 async def get_all_researchers(exists_current_researcher = Depends(get_current_researcher), db: Session = Depends(get_db)):

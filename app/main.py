@@ -8,10 +8,25 @@ from .services import researcher as researcher_service
 from sqlalchemy.orm import Session
 from .config.security import create_access_token
 from .schemas.researcher import ResearcherLogin, ResearcherResponseToken
-
+import os
 models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
+
+if not os.path.exists('imgs'):
+    os.makedirs('imgs')
+if not os.path.exists('trainings_info'):
+    os.makedirs('trainings_info')
+
+if not os.path.exists('tmp'):
+    os.makedirs('tmp')
+
+if not os.path.exists('models'):
+    os.makedirs('models')
+
+
+if not os.path.exists('csvs'):
+    os.makedirs('csvs+')
 
 
 app.add_middleware(
